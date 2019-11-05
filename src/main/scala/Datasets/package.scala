@@ -7,8 +7,8 @@ package object Datasets {
 
   def splitStages[_](action: Action[_]): List[Stage] = {
     val actionUpstream = action match {
-      case CollectAction(upstream)   => upstream
-      case ReduceAction(upstream, _) => upstream
+      case CollectAction(upstream, _)         => upstream
+      case ReduceAction(upstream, reducer, _) => LocalReduceDataset(upstream, reducer)
     }
 
     @tailrec
@@ -29,6 +29,7 @@ package object Datasets {
       case (MappedDataset(us, _), (remain, _))             => extendToStageAux(us, (dataset :: remain, None))
       case (FilteredDataset(us, _), (remain, _))           => extendToStageAux(us, (dataset :: remain, None))
       case (CoalescedDataset(us, partitions), (remain, _)) => ((dataset :: remain, Some(partitions)), us)
+      case (LocalReduceDataset(us, _), (remain, _))        => extendToStageAux(us, (dataset :: remain, None))
     }
 
     extendToStageAux(dataset, (Nil, None)) match {

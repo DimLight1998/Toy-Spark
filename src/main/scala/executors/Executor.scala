@@ -1,16 +1,16 @@
 package executors
 
-import java.net.ServerSocket
+import java.net.{ServerSocket, Socket}
 import java.util.concurrent.CyclicBarrier
-import java.util.logging.Logger
 
-import Communication.{Context, SocketWrapper}
+import Communication.{Config, Context, SocketWrapper}
 import Datasets._
 import org.apache.commons.lang3.SerializationUtils
 
+import scala.collection.mutable.ArrayBuffer
+
 final case class Executor(datasets: List[Dataset[_]],
                           executorId: Int,
-                          nodeId: Int,
                           downstreamPartitions: PartitionSchema,
                           barrier: CyclicBarrier)
     extends Runnable {
@@ -20,12 +20,24 @@ final case class Executor(datasets: List[Dataset[_]],
 
     // get data from the first dataset
     val initialData: List[_] = headDataset match {
-      case GeneratedDataset(_, generator) => generator(nodeId, executorId)
-      case CoalescedDataset(upstream, _) => {
-        // fetch data from each upstream node
-        // todo #9 [H] get data from upstream
-        ???
-      }
+      case GeneratedDataset(_, generator) =>
+        generator(Context.getNodeId, executorId)
+      case CoalescedDataset(_, _) =>
+        val arrayBuffer                      = new ArrayBuffer[Any]
+        val Config((masterIp, _), workerIps) = Context.getConfig
+        val allIps                           = masterIp :: workerIps
+        val allEndpoints = allIps zip Context.getAllExecutorServerPorts flatMap {
+          case (ip, ports) => ports map { (ip, _) }
+        }
+        for ((ip, port) <- allEndpoints) {
+          val socket  = new Socket(ip, port)
+          val message = SerializationUtils.serialize((Context.getNodeId, executorId))
+          SocketWrapper.sendBinaryMessage(socket, message)
+          val recv = SocketWrapper.extractBinaryMessage(socket)
+          arrayBuffer.appendAll(SerializationUtils.deserialize(recv).asInstanceOf[List[Any]])
+          socket.close()
+        }
+        arrayBuffer.toList
       case _ => throw new RuntimeException("unexpected first dataset")
     }
 
@@ -49,7 +61,7 @@ final case class Executor(datasets: List[Dataset[_]],
     }
 
     // wait for the downstream executors to fetch data
-    println(s"thread $executorId at node $nodeId has ${current.length} records")
+    println(s"thread $executorId at node ${Context.getNodeId} has ${current.length} records")
 
     // todo #12 [L] better partition algorithm
     val numDownstreamExecutor = downstreamPartitions.sum
@@ -70,8 +82,7 @@ final case class Executor(datasets: List[Dataset[_]],
       val socket                   = server.accept()
       val message                  = SocketWrapper.extractBinaryMessage(socket)
       val (dsNodeId, dsExecutorId) = SerializationUtils.deserialize(message).asInstanceOf[(Int, Int)]
-      // todo #8 [H] encode and decode to know which executor is it
-      val downstreamIndex = downstreamPartitions.take(dsNodeId).sum + dsExecutorId
+      val downstreamIndex          = downstreamPartitions.take(dsNodeId).sum + dsExecutorId
 
       val data = packed(downstreamIndex)
       SocketWrapper.sendBinaryMessage(socket, data)
