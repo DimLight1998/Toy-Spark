@@ -1,6 +1,5 @@
 import scala.util.Random
-import Datasets.Dataset
-import Communication.{Communication, Context}
+import toyspark._
 
 object Main {
   def main(args: Array[String]): Unit = {

@@ -1,8 +1,8 @@
-package Communication
+package toyspark.utilities
 
 import org.json4s.native.JsonMethods.parse
 
-case class Config(val master: (String, Int), val workers: List[String])
+final case class Config(master: (String, Int), workers: List[String])
 
 object Config {
   def fromJsonFile(pathname: String): Config = {

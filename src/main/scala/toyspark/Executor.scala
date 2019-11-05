@@ -1,13 +1,13 @@
-package executors
+package toyspark
 
+import scala.collection.mutable.ArrayBuffer
 import java.net.{ServerSocket, Socket}
 import java.util.concurrent.CyclicBarrier
 
-import Communication.{Config, Context, SocketWrapper}
-import Datasets._
 import org.apache.commons.lang3.SerializationUtils
 
-import scala.collection.mutable.ArrayBuffer
+import utilities._
+import TypeAliases._
 
 final case class Executor(datasets: List[Dataset[_]],
                           executorId: Int,
@@ -33,7 +33,7 @@ final case class Executor(datasets: List[Dataset[_]],
           val socket  = new Socket(ip, port)
           val message = SerializationUtils.serialize((Context.getNodeId, executorId))
           SocketWrapper.sendBinaryMessage(socket, message)
-          val recv = SocketWrapper.extractBinaryMessage(socket)
+          val recv = SocketWrapper.recvBinaryMessage(socket)
           arrayBuffer.appendAll(SerializationUtils.deserialize(recv).asInstanceOf[List[Any]])
           socket.close()
         }
@@ -80,7 +80,7 @@ final case class Executor(datasets: List[Dataset[_]],
 
     while (!allFetched) {
       val socket                   = server.accept()
-      val message                  = SocketWrapper.extractBinaryMessage(socket)
+      val message                  = SocketWrapper.recvBinaryMessage(socket)
       val (dsNodeId, dsExecutorId) = SerializationUtils.deserialize(message).asInstanceOf[(Int, Int)]
       val downstreamIndex          = downstreamPartitions.take(dsNodeId).sum + dsExecutorId
 

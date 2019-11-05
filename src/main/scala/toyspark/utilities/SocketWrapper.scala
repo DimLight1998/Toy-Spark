@@ -1,4 +1,4 @@
-package Communication
+package toyspark.utilities
 
 import java.net.Socket
 import java.nio.ByteBuffer
@@ -16,7 +16,7 @@ object SocketWrapper {
     }
   }
 
-  def extractBinaryMessage(socket: Socket): Array[Byte] = {
+  def recvBinaryMessage(socket: Socket): Array[Byte] = {
     val header = Array.ofDim[Byte](_sizeIndicatorNumByte)
     fullyRead(socket, header)
     val messageLength = ByteBuffer.wrap(header).getInt
@@ -25,8 +25,8 @@ object SocketWrapper {
     content
   }
 
-  def extractTextMessage(socket: Socket): String = {
-    val content = extractBinaryMessage(socket)
+  def recvTextMessage(socket: Socket): String = {
+    val content = recvBinaryMessage(socket)
     new String(content, "UTF-8")
   }
 

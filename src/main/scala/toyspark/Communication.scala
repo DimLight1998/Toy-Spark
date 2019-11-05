@@ -1,4 +1,4 @@
-package Communication
+package toyspark
 
 import java.net._
 import java.util.logging.Logger
@@ -7,8 +7,8 @@ import org.apache.commons.lang3.SerializationUtils
 import org.json4s._
 import org.json4s.JsonDSL._
 import org.json4s.native.JsonMethods._
-
-import SocketWrapper._
+import toyspark.utilities.{Config, SocketWrapper}
+import toyspark.utilities.SocketWrapper._
 
 object Communication {
   def initialize(args: Array[String]): Unit = {
@@ -37,7 +37,7 @@ object Communication {
       Context.setManagerServerSocket(server)
       while (!allReady) {
         val socket         = server.accept()
-        val message        = parse(SocketWrapper.extractTextMessage(socket))
+        val message        = parse(SocketWrapper.recvTextMessage(socket))
         val List(port)     = for { JInt(port) <- message \ "port" } yield port.toInt
         val List(workerId) = for { JInt(port) <- message \ "id" } yield port.toInt
 
@@ -79,7 +79,7 @@ object Communication {
 
       // waiting for master's broadcast
       val receivingSocket = Context.getManagerServerSocket.accept()
-      val contactsMessage = extractBinaryMessage(receivingSocket)
+      val contactsMessage = recvBinaryMessage(receivingSocket)
       Context.setManagerContacts(SerializationUtils.deserialize(contactsMessage).asInstanceOf[Array[Int]])
       receivingSocket.close()
 

@@ -1,6 +1,8 @@
-package Communication
+package toyspark
 
 import java.net._
+
+import toyspark.utilities.Config
 
 object Context {
   private var _nodeId: Int                               = _

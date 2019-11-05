@@ -1,34 +1,16 @@
-package Datasets
+package toyspark
+
+import scala.collection.mutable.ArrayBuffer
 
 import java.net.Socket
 import java.util.concurrent.CyclicBarrier
 import java.util.logging.Logger
 
-import Communication.SocketWrapper.sendBinaryMessage
-import Communication.{Config, Context, SocketWrapper}
-import executors.Executor
 import org.apache.commons.lang3.SerializationUtils
 
-import scala.collection.mutable.ArrayBuffer
-
-abstract class Dataset[T] {
-  def map[U](mapper: T => U): MappedDataset[T, U]           = MappedDataset(this, mapper)
-  def filter(pred: T => Boolean): FilteredDataset[T]        = FilteredDataset(this, pred)
-  def coalesced(partitions: List[Int]): CoalescedDataset[T] = CoalescedDataset(this, partitions)
-  def reduce(reducer: (T, T) => T, workerRet: T): T         = ReduceAction(this, reducer, workerRet).perform()
-  def collect(workerRet: List[T]): List[T]                  = CollectAction(this, workerRet).perform()
-}
-
-object Dataset {
-  def generate[T](partitions: List[Int], generator: (Int, Int) => List[T]): GeneratedDataset[T] =
-    GeneratedDataset(partitions, generator)
-}
-
-case class GeneratedDataset[T](partitions: List[Int], generator: (Int, Int) => List[T]) extends Dataset[T]
-case class MappedDataset[T, U](upstream: Dataset[T], mapper: T => U)                    extends Dataset[U]
-case class FilteredDataset[T](upstream: Dataset[T], pred: T => Boolean)                 extends Dataset[T]
-case class CoalescedDataset[T](upstream: Dataset[T], partitions: List[Int])             extends Dataset[T]
-case class LocalReduceDataset[T](upstream: Dataset[T], reducer: (T, T) => T)            extends Dataset[T]
+import utilities._
+import utilities.SocketWrapper._
+import StageSplit._
 
 abstract class Action[T] {
   def performTransformations(): Unit = {
@@ -59,7 +41,7 @@ abstract class Action[T] {
         var numReported = 1
         while (numReported < Context.getNumNodes) {
           val socket  = Context.getManagerServerSocket.accept()
-          val message = SocketWrapper.extractBinaryMessage(socket)
+          val message = SocketWrapper.recvBinaryMessage(socket)
           val (senderNodeId, executorServerPorts) =
             SerializationUtils.deserialize(message).asInstanceOf[(Int, Array[Int])]
           allExecutorServerPorts(senderNodeId) = executorServerPorts
@@ -85,7 +67,7 @@ abstract class Action[T] {
         socket.close()
 
         val receivingSocket               = Context.getManagerServerSocket.accept()
-        val allExecutorServerPortsMessage = SocketWrapper.extractBinaryMessage(receivingSocket)
+        val allExecutorServerPortsMessage = SocketWrapper.recvBinaryMessage(receivingSocket)
         Context.setAllExecutorServerPorts(
           SerializationUtils.deserialize(allExecutorServerPortsMessage).asInstanceOf[Array[Array[Int]]]
         )
@@ -108,7 +90,7 @@ abstract class Action[T] {
       val socket  = new Socket(ip, port)
       val message = SerializationUtils.serialize((Context.getNodeId, 0))
       SocketWrapper.sendBinaryMessage(socket, message)
-      val recv = SocketWrapper.extractBinaryMessage(socket)
+      val recv = SocketWrapper.recvBinaryMessage(socket)
       arrayBuffer.appendAll(SerializationUtils.deserialize(recv).asInstanceOf[List[T]])
       socket.close()
     }

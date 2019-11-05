@@ -1,9 +1,11 @@
+package toyspark
+
 import scala.annotation.tailrec
 
-package object Datasets {
-  type PartitionSchema = List[Int]
-  type Stage           = (List[Dataset[_]], PartitionSchema)
-  type StageAlt        = (List[Dataset[_]], Option[PartitionSchema])
+import TypeAliases._
+
+object StageSplit {
+  type StageAlt = (List[Dataset[_]], Option[PartitionSchema])
 
   def splitStages[_](action: Action[_]): List[Stage] = {
     val actionUpstream = action match {
