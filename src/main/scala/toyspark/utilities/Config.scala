@@ -15,6 +15,8 @@ object Config {
     val masterPort = Integer.parseInt((config \ "master" \ "port").values.asInstanceOf[String])
     val workers    = (config \ "workers").values.asInstanceOf[List[Map[String, String]]]
     val workerIps  = workers.map(x => x("ip"))
+    HDFSUtil.coreSitePath = (config \ "hdfs" \ "coreSitePath").values.asInstanceOf[String]
+    HDFSUtil.hdfsUrl = (config \ "hdfs" \ "url").values.asInstanceOf[String]
     Config((masterIp, masterPort), workerIps)
   }
 }

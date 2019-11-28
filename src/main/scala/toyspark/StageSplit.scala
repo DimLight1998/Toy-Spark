@@ -9,8 +9,11 @@ object StageSplit {
 
   def splitStages[_](action: Action[_]): List[Stage] = {
     val actionUpstream = action match {
-      case CollectAction(upstream, _)         => upstream
-      case ReduceAction(upstream, reducer, _) => LocalReduceDataset(upstream, reducer)
+      case CollectAction(upstream, _)                    => upstream
+      case CountAction(upstream)                         => LocalCountDataset(upstream)
+      case TakeAction(upstream, _, _)                    => upstream
+      case SaveAsSequenceFileAction(upstream, dir, name) => LocalSaveAsSequenceFileDataset(upstream, dir, name)
+      case ReduceAction(upstream, reducer, _)            => LocalReduceDataset(upstream, reducer)
     }
 
     @tailrec
@@ -27,11 +30,14 @@ object StageSplit {
   def extendToStage(dataset: Dataset[_]): (Stage, Dataset[_]) = {
     @tailrec
     def extendToStageAux(dataset: Dataset[_], acc: StageAlt): (StageAlt, Dataset[_]) = (dataset, acc) match {
-      case (GeneratedDataset(partitions, _), (remain, _))  => ((dataset :: remain, Some(partitions)), null)
-      case (MappedDataset(us, _), (remain, _))             => extendToStageAux(us, (dataset :: remain, None))
-      case (FilteredDataset(us, _), (remain, _))           => extendToStageAux(us, (dataset :: remain, None))
-      case (CoalescedDataset(us, partitions), (remain, _)) => ((dataset :: remain, Some(partitions)), us)
-      case (LocalReduceDataset(us, _), (remain, _))        => extendToStageAux(us, (dataset :: remain, None))
+      case (GeneratedDataset(partitions, _), (remain, _))          => ((dataset :: remain, Some(partitions)), null)
+      case (ReadDataset(partitions, _, _), (remain, _))            => ((dataset :: remain, Some(partitions)), null)
+      case (MappedDataset(us, _), (remain, _))                     => extendToStageAux(us, (dataset :: remain, None))
+      case (FilteredDataset(us, _), (remain, _))                   => extendToStageAux(us, (dataset :: remain, None))
+      case (CoalescedDataset(us, partitions), (remain, _))         => ((dataset :: remain, Some(partitions)), us)
+      case (LocalCountDataset(us), (remain, _))                    => extendToStageAux(us, (dataset :: remain, None))
+      case (LocalReduceDataset(us, _), (remain, _))                => extendToStageAux(us, (dataset :: remain, None))
+      case (LocalSaveAsSequenceFileDataset(us, _, _), (remain, _)) => extendToStageAux(us, (dataset :: remain, None))
     }
 
     extendToStageAux(dataset, (Nil, None)) match {

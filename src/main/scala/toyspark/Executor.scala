@@ -1,27 +1,39 @@
 package toyspark
-
 import scala.collection.mutable.ArrayBuffer
+import math.{ceil, min}
 import java.net.{ServerSocket, Socket}
 import java.util.concurrent.CyclicBarrier
-
 import org.apache.commons.lang3.SerializationUtils
-
+import toyspark.utilities.HDFSUtil
 import utilities._
 import TypeAliases._
+import java.nio.file.Paths
 
 final case class Executor(datasets: List[Dataset[_]],
                           executorId: Int,
                           downstreamPartitions: PartitionSchema,
-                          barrier: CyclicBarrier)
+                          barrier: CyclicBarrier,
+                          innerBarrier: CyclicBarrier)
     extends Runnable {
+  private def makeList[T](elems: Object, dtype: T) = elems.asInstanceOf[List[T]]
   override def run(): Unit = {
     // execute the stage
     val headDataset :: tailDatasets = datasets
-
     // get data from the first dataset
     val initialData: List[_] = headDataset match {
       case GeneratedDataset(_, generator) =>
         generator(Context.getNodeId, executorId)
+      case ReadDataset(partitions, dataFile, dtype) =>
+        // todo: Need optimization with less access to hdfs file
+        val datas = makeList(SerializationUtils.deserialize(HDFSUtil.readHDFSFile(dataFile, Some(innerBarrier))), dtype)
+        val threads = partitions.sum
+        var index = executorId
+        for (i <- 0 until Context.getNodeId) {
+          index += partitions(i)
+        }
+        val len = datas.toArray.length
+        val slices = ceil(len.asInstanceOf[Double] / threads).asInstanceOf[Int]
+        datas.slice(index*slices, min(len, (index+1)*slices))
       case CoalescedDataset(_, _) =>
         val arrayBuffer                      = new ArrayBuffer[Any]
         val Config((masterIp, _), workerIps) = Context.getConfig
@@ -47,16 +59,27 @@ final case class Executor(datasets: List[Dataset[_]],
 
     // notify manager thread that executor server sockets initialized
     barrier.await()
-
     // for each record in it, compute them dataset by dataset
     var current = initialData
     for (transformation <- tailDatasets) {
       transformation match {
         // todo #4 [L] how to cooperate with type system
-        case FilteredDataset(_, pred)       => current = current.filter(pred.asInstanceOf[Any => Boolean])
-        case MappedDataset(_, mapper)       => current = current.map(mapper.asInstanceOf[Any => Any])
-        case LocalReduceDataset(_, reducer) => current = List(current.reduce(reducer.asInstanceOf[(Any, Any) => Any]))
-        case _                              => throw new RuntimeException("unexpected intermediate transformation")
+        case FilteredDataset(_, pred) =>
+          current = current.filter(pred.asInstanceOf[Any => Boolean])
+        case MappedDataset(_, mapper) =>
+          current = current.map(mapper.asInstanceOf[Any => Any])
+        case LocalCountDataset(_) =>
+          current = List(current.length)
+        case LocalReduceDataset(_, reducer) =>
+          current = List(current.reduce(reducer.asInstanceOf[(Any, Any) => Any]))
+        case LocalSaveAsSequenceFileDataset(_, dir, name) =>
+          val serial = SerializationUtils.serialize(current)
+          println("nodeid=%d,executorid=%d,path=%s".format(Context.getNodeId, executorId, Paths.get(dir, name+Context.getNodeId+executorId+".dat").toString))
+          current = List(HDFSUtil.createNewHDFSFile(
+            Paths.get(dir, name+Context.getNodeId+executorId+".dat").toString, serial, Some(innerBarrier)
+          ))
+        case _ =>
+          throw new RuntimeException("unexpected intermediate transformation")
       }
     }
 
