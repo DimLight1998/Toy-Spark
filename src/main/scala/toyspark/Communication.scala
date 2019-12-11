@@ -58,7 +58,6 @@ object Communication {
       Context.setManagerContacts(ports)
 
       // tell workers everyone's port
-      // todo #13 is this broadcast needed?
       val contactsMessage = SerializationUtils.serialize(ports)
       for ((workerIp, i) <- config.workers.view.zipWithIndex) {
         val socket = new Socket(workerIp, ports(i + 1))

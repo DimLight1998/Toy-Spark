@@ -1,7 +1,6 @@
 package toyspark.utilities
 
 import java.io._
-import java.net.URI
 import java.util.concurrent.CyclicBarrier
 
 import org.apache.commons.lang3.StringUtils

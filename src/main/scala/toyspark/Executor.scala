@@ -63,7 +63,6 @@ final case class Executor(datasets: List[Dataset[_]],
     var current = initialData
     for (transformation <- tailDatasets) {
       transformation match {
-        // todo #4 [L] how to cooperate with type system
         case FilteredDataset(_, pred) =>
           current = current.filter(pred.asInstanceOf[Any => Boolean])
         case MappedDataset(_, mapper) =>
@@ -93,7 +92,6 @@ final case class Executor(datasets: List[Dataset[_]],
     // wait for the downstream executors to fetch data
     println(s"thread $executorId at node ${Context.getNodeId} has ${current.length} records")
 
-    // todo #12 [L] better partition algorithm
     val numDownstreamExecutor = downstreamPartitions.sum
     val sliced = if (current.length % numDownstreamExecutor == 0) {
       current.grouped(current.length / numDownstreamExecutor)
