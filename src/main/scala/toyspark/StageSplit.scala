@@ -34,7 +34,7 @@ object StageSplit {
       case (ReadDataset(partitions, _, _), (remain, _))            => ((dataset :: remain, Some(partitions)), null)
       case (MappedDataset(us, _), (remain, _))                     => extendToStageAux(us, (dataset :: remain, None))
       case (FilteredDataset(us, _), (remain, _))                   => extendToStageAux(us, (dataset :: remain, None))
-      case (CoalescedDataset(us, partitions), (remain, _))         => ((dataset :: remain, Some(partitions)), us)
+      case (RepartitionDataset(us, partitions), (remain, _))       => ((dataset :: remain, Some(partitions)), us)
       case (LocalCountDataset(us), (remain, _))                    => extendToStageAux(us, (dataset :: remain, None))
       case (LocalReduceDataset(us, _), (remain, _))                => extendToStageAux(us, (dataset :: remain, None))
       case (LocalSaveAsSequenceFileDataset(us, _, _), (remain, _)) => extendToStageAux(us, (dataset :: remain, None))

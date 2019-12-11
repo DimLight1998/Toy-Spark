@@ -34,7 +34,7 @@ final case class Executor(datasets: List[Dataset[_]],
         val len    = datas.toArray.length
         val slices = ceil(len.asInstanceOf[Double] / threads).asInstanceOf[Int]
         datas.slice(index * slices, min(len, (index + 1) * slices))
-      case CoalescedDataset(_, _) =>
+      case RepartitionDataset(_, _) =>
         val arrayBuffer                      = new ArrayBuffer[Any]
         val Config((masterIp, _), workerIps) = Context.getConfig
         val allIps                           = masterIp :: workerIps
