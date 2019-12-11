@@ -25,15 +25,15 @@ final case class Executor(datasets: List[Dataset[_]],
         generator(Context.getNodeId, executorId)
       case ReadDataset(partitions, dataFile, dtype) =>
         // todo: Need optimization with less access to hdfs file
-        val datas = makeList(SerializationUtils.deserialize(HDFSUtil.readHDFSFile(dataFile, Some(innerBarrier))), dtype)
+        val datas   = makeList(SerializationUtils.deserialize(HDFSUtil.readHDFSFile(dataFile, Some(innerBarrier))), dtype)
         val threads = partitions.sum
-        var index = executorId
+        var index   = executorId
         for (i <- 0 until Context.getNodeId) {
           index += partitions(i)
         }
-        val len = datas.toArray.length
+        val len    = datas.toArray.length
         val slices = ceil(len.asInstanceOf[Double] / threads).asInstanceOf[Int]
-        datas.slice(index*slices, min(len, (index+1)*slices))
+        datas.slice(index * slices, min(len, (index + 1) * slices))
       case CoalescedDataset(_, _) =>
         val arrayBuffer                      = new ArrayBuffer[Any]
         val Config((masterIp, _), workerIps) = Context.getConfig
@@ -74,10 +74,17 @@ final case class Executor(datasets: List[Dataset[_]],
           current = List(current.reduce(reducer.asInstanceOf[(Any, Any) => Any]))
         case LocalSaveAsSequenceFileDataset(_, dir, name) =>
           val serial = SerializationUtils.serialize(current)
-          println("nodeid=%d,executorid=%d,path=%s".format(Context.getNodeId, executorId, Paths.get(dir, name+Context.getNodeId+executorId+".dat").toString))
-          current = List(HDFSUtil.createNewHDFSFile(
-            Paths.get(dir, name+Context.getNodeId+executorId+".dat").toString, serial, Some(innerBarrier)
-          ))
+          println(
+            "nodeid=%d,executorid=%d,path=%s".format(
+              Context.getNodeId,
+              executorId,
+              Paths.get(dir, name + Context.getNodeId + executorId + ".dat").toString))
+          current = List(
+            HDFSUtil.createNewHDFSFile(
+              Paths.get(dir, name + Context.getNodeId + executorId + ".dat").toString,
+              serial,
+              Some(innerBarrier)
+            ))
         case _ =>
           throw new RuntimeException("unexpected intermediate transformation")
       }

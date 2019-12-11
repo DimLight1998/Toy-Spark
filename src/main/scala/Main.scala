@@ -2,7 +2,6 @@ import org.apache.commons.lang3.SerializationUtils
 import scala.util.Random
 import toyspark._
 
-
 object Main {
   def main(args: Array[String]): Unit = {
     Communication.initialize(args)
@@ -31,19 +30,15 @@ object Main {
     // //println(pi)
     // println("Bye!")
 
-
     val pi = Dataset
-                  .generate(
-                    List(4, 4, 4),
-                    (_, _) => (0 until 1000000).map(
-                      _ => (Random.nextDouble(), Random.nextDouble())).toList)
-                  .map({ case (x, y) => (x * 2 - 1, y * 2 - 1) })
-                  .coalesced(List(8, 8, 8))
-                  .filter({ case (x, y) => x * x + y * y < 1 })
-                  .map(_ => 1)
-                  .reduce((x, y) => x + y, 0)
-               //	 .collect(Nil)
-                println(s"The result of Pi is ${pi / (1000000.0 * 12) * 4}")
+      .generate(List(4, 4, 4), (_, _) => (0 until 1000000).map(_ => (Random.nextDouble(), Random.nextDouble())).toList)
+      .map({ case (x, y) => (x * 2 - 1, y * 2 - 1) })
+      .coalesced(List(8, 8, 8))
+      .filter({ case (x, y) => x * x + y * y < 1 })
+      .map(_ => 1)
+      .reduce((x, y) => x + y, 0)
+    //	 .collect(Nil)
+    println(s"The result of Pi is ${pi / (1000000.0 * 12) * 4}")
 
   }
 }

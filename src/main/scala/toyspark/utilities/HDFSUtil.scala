@@ -16,17 +16,17 @@ import scala.collection.mutable.ArrayBuffer
   * HDFS operator
   */
 object HDFSUtil {
-  var hdfsUrl = ""
-  var realUrl = ""
+  var hdfsUrl      = ""
+  var realUrl      = ""
   var coreSitePath = ""
 
-  /**
+  /**f
     * make a new dir in the hdfs
     *
     * @param dir the dir may like '/tmp/testdir'
     * @return boolean true-success, false-failed
     */
-  def mkdir(dir : String) : Boolean = {
+  def mkdir(dir: String): Boolean = {
     var result = false
     if (StringUtils.isNotBlank(dir)) {
       realUrl = hdfsUrl + dir
@@ -50,7 +50,7 @@ object HDFSUtil {
     * @return boolean true-success, false-failed
     *
     */
-  def deleteDir(dir : String) : Boolean = {
+  def deleteDir(dir: String): Boolean = {
     var result = false
     if (StringUtils.isNotBlank(dir)) {
       realUrl = hdfsUrl + dir
@@ -71,13 +71,13 @@ object HDFSUtil {
     * @param dir a folder path may like '/tmp/testdir'
     * @return List[String] list of file names
     */
-  def listAll(dir : String) : List[String] = {
+  def listAll(dir: String): List[String] = {
     val names = ArrayBuffer[String]()
     if (StringUtils.isNotBlank(dir)) {
       realUrl = hdfsUrl + dir
       val config = new Configuration()
       config.addResource(new Path(coreSitePath))
-      val fs = FileSystem.get(config)
+      val fs    = FileSystem.get(config)
       val stats = fs.listStatus(new Path(realUrl))
       for (i <- stats.indices) {
         if (stats(i).isFile) {
@@ -103,15 +103,15 @@ object HDFSUtil {
     * @return boolean true-success, false-failed
     *
     **/
-  def uploadLocalFile2HDFS(localFile : String, hdfsFile : String) : Boolean = {
+  def uploadLocalFile2HDFS(localFile: String, hdfsFile: String): Boolean = {
     var result = false
     if (StringUtils.isNotBlank(localFile) && StringUtils.isNotBlank(hdfsFile)) {
       realUrl = hdfsUrl + hdfsFile
       val config = new Configuration()
       config.addResource(new Path(coreSitePath))
       val hdfs = FileSystem.get(config)
-      val src = new Path(localFile)
-      val dst = new Path(realUrl)
+      val src  = new Path(localFile)
+      val dst  = new Path(realUrl)
       hdfs.copyFromLocalFile(src, dst)
       hdfs.close()
       result = true
@@ -130,18 +130,18 @@ object HDFSUtil {
     * @param content file content
     * @return boolean true-success, false-failed
     **/
-  def createNewHDFSFile(newFile : String, content : Array[Byte], barrier: Option[CyclicBarrier] = None) : Boolean = {
+  def createNewHDFSFile(newFile: String, content: Array[Byte], barrier: Option[CyclicBarrier] = None): Boolean = {
     var result = false
     if (StringUtils.isNotBlank(newFile) && null != content) {
       realUrl = hdfsUrl + newFile
       val config = new Configuration()
       config.addResource(new Path(coreSitePath))
       val hdfs = FileSystem.get(config)
-      val os = hdfs.create(new Path(realUrl))
+      val os   = hdfs.create(new Path(realUrl))
       os.write(content)
       barrier match {
         case Some(br) => br.await()
-        case None =>
+        case None     =>
       }
       os.close()
       hdfs.close()
@@ -156,14 +156,14 @@ object HDFSUtil {
     * @param hdfsFile a full path name, may like '/tmp/test.txt'
     * @return boolean true-success, false-failed
     */
-  def deleteHDFSFile(hdfsFile : String) : Boolean = {
+  def deleteHDFSFile(hdfsFile: String): Boolean = {
     var result = false
     if (StringUtils.isNotBlank(hdfsFile)) {
       realUrl = hdfsUrl + hdfsFile
       val config = new Configuration()
       config.addResource(new Path(coreSitePath))
-      val hdfs = FileSystem.get(config)
-      val path = new Path(realUrl)
+      val hdfs      = FileSystem.get(config)
+      val path      = new Path(realUrl)
       val isDeleted = hdfs.delete(path, true)
       hdfs.close()
       result = isDeleted
@@ -177,8 +177,8 @@ object HDFSUtil {
     * @param hdfsFile a full path name, may like '/tmp/test.txt'
     * @return byte[] file content
     */
-  def readHDFSFile(hdfsFile : String, barrier: Option[CyclicBarrier] = None) : Array[Byte] = {
-    var result =  new Array[Byte](0)
+  def readHDFSFile(hdfsFile: String, barrier: Option[CyclicBarrier] = None): Array[Byte] = {
+    var result = new Array[Byte](0)
     if (StringUtils.isNotBlank(hdfsFile)) {
       realUrl = hdfsUrl + hdfsFile
       val config = new Configuration()
@@ -187,13 +187,13 @@ object HDFSUtil {
       val path = new Path(realUrl)
       if (hdfs.exists(path)) {
         val inputStream = hdfs.open(path)
-        val stat = hdfs.getFileStatus(path)
-        val length = stat.getLen.toInt
-        val buffer = new Array[Byte](length)
+        val stat        = hdfs.getFileStatus(path)
+        val length      = stat.getLen.toInt
+        val buffer      = new Array[Byte](length)
         inputStream.readFully(buffer)
         barrier match {
           case Some(br) => br.await()
-          case None =>
+          case None     =>
         }
         inputStream.close()
         hdfs.close()
@@ -210,7 +210,7 @@ object HDFSUtil {
     * @param content string
     * @return boolean true-success, false-failed
     */
-  def append(hdfsFile : String, content : String) : Boolean = {
+  def append(hdfsFile: String, content: String): Boolean = {
     var result = false
     if (StringUtils.isNotBlank(hdfsFile) && null != content) {
       realUrl = hdfsUrl + hdfsFile
@@ -221,7 +221,7 @@ object HDFSUtil {
       val hdfs = FileSystem.get(config)
       val path = new Path(realUrl)
       if (hdfs.exists(path)) {
-        val inputStream = new ByteArrayInputStream(content.getBytes())
+        val inputStream  = new ByteArrayInputStream(content.getBytes())
         val outputStream = hdfs.append(path)
         IOUtils.copyBytes(inputStream, outputStream, 4096, true)
         outputStream.close()

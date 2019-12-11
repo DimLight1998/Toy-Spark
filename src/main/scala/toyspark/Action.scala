@@ -25,7 +25,8 @@ abstract class Action[T] {
 
       Context.setLocalExecutorServerPorts(Array.ofDim(numLocalPartition))
       val threads =
-        (0 until numLocalPartition).map(i => new Thread(Executor(datasets, i, downstreamPartitions, barrier, innerBarrier)))
+        (0 until numLocalPartition).map(i =>
+          new Thread(Executor(datasets, i, downstreamPartitions, barrier, innerBarrier)))
       threads.foreach(t => t.start())
 
       barrier.await()
@@ -157,7 +158,7 @@ case class SaveAsSequenceFileAction[T](upstream: Dataset[T], dir: String, name: 
 
     // collect data from upstream executors
     if (Context.isMaster) {
-      fetchFinalArrayBuffer().toList.reduce(_&&_)
+      fetchFinalArrayBuffer().toList.reduce(_ && _)
     } else {
       false
     }

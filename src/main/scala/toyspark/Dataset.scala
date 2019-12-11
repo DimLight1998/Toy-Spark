@@ -18,11 +18,11 @@ object Dataset {
     ReadDataset(partitions, dataFile, dtype)
 }
 
-case class GeneratedDataset[T](partitions: List[Int], generator: (Int, Int) => List[T])         extends Dataset[T]
-case class ReadDataset[T](partitions: List[Int], dataFile: String, dtype: T)                    extends Dataset[T]
-case class MappedDataset[T, U](upstream: Dataset[T], mapper: T => U)                            extends Dataset[U]
-case class FilteredDataset[T](upstream: Dataset[T], pred: T => Boolean)                         extends Dataset[T]
-case class CoalescedDataset[T](upstream: Dataset[T], partitions: List[Int])                     extends Dataset[T]
-case class LocalCountDataset[T](upstream: Dataset[T])                                           extends Dataset[T]
-case class LocalSaveAsSequenceFileDataset[T](upstream: Dataset[T], dir: String, name:String)    extends Dataset[T]
-case class LocalReduceDataset[T](upstream: Dataset[T], reducer: (T, T) => T)                    extends Dataset[T]
+case class GeneratedDataset[T](partitions: List[Int], generator: (Int, Int) => List[T])       extends Dataset[T]
+case class ReadDataset[T](partitions: List[Int], dataFile: String, dtype: T)                  extends Dataset[T]
+case class MappedDataset[T, U](upstream: Dataset[T], mapper: T => U)                          extends Dataset[U]
+case class FilteredDataset[T](upstream: Dataset[T], pred: T => Boolean)                       extends Dataset[T]
+case class CoalescedDataset[T](upstream: Dataset[T], partitions: List[Int])                   extends Dataset[T]
+case class LocalCountDataset[T](upstream: Dataset[T])                                         extends Dataset[T]
+case class LocalSaveAsSequenceFileDataset[T](upstream: Dataset[T], dir: String, name: String) extends Dataset[T]
+case class LocalReduceDataset[T](upstream: Dataset[T], reducer: (T, T) => T)                  extends Dataset[T]
