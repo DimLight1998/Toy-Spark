@@ -8,13 +8,13 @@ object Main {
 
     val lhs = Dataset.generate(
       List(4, 4, 4),
-      (nodeID, localPartitionID) => (0 until 10).toList.map(i => i + localPartitionID * 100 + nodeID * 1000))
+      (nodeID, localPartitionID) => (0 until 1000).toList.map(i => i + localPartitionID * 10000 + nodeID * 100000))
 
     print(lhs.count())
     val rhs = Dataset.generate(
       List(2, 3, 3),
-      (nodeID, localPartitionID) => (0 until 20).toList.map(i => i + localPartitionID * 100 + nodeID * 1000))
-    val mappedRHS = rhs.map(x => -3 * x).filter(x => x % 2 == 0)
+      (nodeID, localPartitionID) => (0 until 2000).toList.map(i => i + localPartitionID * 10000 + nodeID * 100000))
+    val mappedRHS = rhs.map(x => -3 * x).repartition(List(4, 2, 2)).filter(x => x % 2 == 0)
     val joint     = lhs.unionWith(mappedRHS)
 
     print(joint.collect(Nil).mkString(", "))
