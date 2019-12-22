@@ -3,125 +3,102 @@ import scala.collection.mutable.ArrayBuffer
 import math.{ceil, min}
 import java.net.{ServerSocket, Socket}
 import java.util.concurrent.CyclicBarrier
+
 import org.apache.commons.lang3.SerializationUtils
 import toyspark.utilities.HDFSUtil
-import utilities._
+import toyspark.utilities.SocketWrapper._
+import toyspark.Communication._
 import TypeAliases._
 import java.nio.file.Paths
+import java.util.logging.Logger
 
 final case class Executor(datasets: List[Dataset[_]],
                           executorId: Int,
-                          downstreamPartitions: PartitionSchema,
+                          thisStagePartitions: PartitionSchema,
                           barrier: CyclicBarrier,
-                          innerBarrier: CyclicBarrier)
+                          hdfsBarrier: CyclicBarrier)
     extends Runnable {
   private def makeList[T](elems: Object, dtype: T) = elems.asInstanceOf[List[T]]
+
   override def run(): Unit = {
-    // execute the stage
-    val headDataset :: tailDatasets = datasets
-    // get data from the first dataset
-    val initialData: List[_] = headDataset match {
+    // todo lookup for `save` and start from there
+
+    val initialData    = getInitialData(datasets.head)
+    val finalData      = datasets.tail.foldLeft(initialData)((iter, trans) => performTransformation(trans, iter))
+    val finalDatasetID = Context.getOrAssignDatasetID(datasets.last)
+    Context.setSendingBufferEntry(finalDatasetID, executorId, finalData)
+    barrier.await()
+  }
+
+  private def getExecutorIndex: Int               = executorId + thisStagePartitions.take(Context.getNodeId).sum
+  private def getSeed(datasets: Dataset[_]*): Int = datasets.toList.hashCode()
+
+  private def getInitialData(headDataset: Dataset[_]): List[_] = {
+    headDataset match {
       case GeneratedDataset(_, generator) =>
         generator(Context.getNodeId, executorId)
       case ReadDataset(partitions, dataFile, dtype) =>
         // todo: Need optimization with less access to hdfs file
-        val datas   = makeList(SerializationUtils.deserialize(HDFSUtil.readHDFSFile(dataFile, Some(innerBarrier))), dtype)
+        val hdfsData =
+          makeList(SerializationUtils.deserialize(HDFSUtil.readHDFSFile(dataFile, Some(hdfsBarrier))), dtype)
         val threads = partitions.sum
         var index   = executorId
         for (i <- 0 until Context.getNodeId) {
           index += partitions(i)
         }
-        val len    = datas.toArray.length
+        val len    = hdfsData.toArray.length
         val slices = ceil(len.asInstanceOf[Double] / threads).asInstanceOf[Int]
-        datas.slice(index * slices, min(len, (index + 1) * slices))
-      case RepartitionDataset(_, _) =>
-        val arrayBuffer                      = new ArrayBuffer[Any]
-        val Config((masterIp, _), workerIps) = Context.getConfig
-        val allIps                           = masterIp :: workerIps
-        val allEndpoints = allIps zip Context.getAllExecutorServerPorts flatMap {
-          case (ip, ports) => ports map { (ip, _) }
-        }
-        for ((ip, port) <- allEndpoints) {
-          val socket  = new Socket(ip, port)
-          val message = SerializationUtils.serialize((Context.getNodeId, executorId))
-          SocketWrapper.sendBinaryMessage(socket, message)
-          val recv = SocketWrapper.recvBinaryMessage(socket)
-          arrayBuffer.appendAll(SerializationUtils.deserialize(recv).asInstanceOf[List[Any]])
-          socket.close()
-        }
-        arrayBuffer.toList
-      case _ => throw new RuntimeException("unexpected first dataset")
+        hdfsData.slice(index * slices, min(len, (index + 1) * slices))
+      case RepartitionDataset(ups, _) =>
+        val seed = getSeed(headDataset, ups)
+        requestDataOverNetwork(ups, PartialSampling(getExecutorIndex, thisStagePartitions.sum, seed))
+      case _ => throw new RuntimeException("unexpected initial dataset")
     }
+  }
 
-    // initialize executors' server socket
-    val server = new ServerSocket(0)
-    Context.getLocalExecutorServerPorts(executorId) = server.getLocalPort
-
-    // notify manager thread that executor server sockets initialized
-    barrier.await()
-    // for each record in it, compute them dataset by dataset
-    var current = initialData
-    for (transformation <- tailDatasets) {
-      transformation match {
-        case FilteredDataset(_, pred) =>
-          current = current.filter(pred.asInstanceOf[Any => Boolean])
-        case MappedDataset(_, mapper) =>
-          current = current.map(mapper.asInstanceOf[Any => Any])
-        case LocalCountDataset(_) =>
-          current = List(current.length)
-        case LocalReduceDataset(_, reducer) =>
-          current = List(current.reduce(reducer.asInstanceOf[(Any, Any) => Any]))
-        case LocalSaveAsSequenceFileDataset(_, dir, name) =>
-          val serial = SerializationUtils.serialize(current)
-          println(
-            "nodeid=%d,executorid=%d,path=%s".format(
-              Context.getNodeId,
-              executorId,
-              Paths.get(dir, name + Context.getNodeId + executorId + ".dat").toString))
-          current = List(
-            HDFSUtil.createNewHDFSFile(
-              Paths.get(dir, name + Context.getNodeId + executorId + ".dat").toString,
-              serial,
-              Some(innerBarrier)
-            ))
-        case _ =>
-          throw new RuntimeException("unexpected intermediate transformation")
-      }
+  private def performTransformation(transformationToPerform: Dataset[_], data: List[_]): List[_] = {
+    // todo while computing, handle `save`
+    transformationToPerform match {
+      case MappedDataset(_, mapper)       => data.map(mapper.asInstanceOf[Any => Any])
+      case FilteredDataset(_, pred)       => data.filter(pred.asInstanceOf[Any => Boolean])
+      case LocalCountDataset(_)           => List(data.length)
+      case LocalReduceDataset(_, reducer) => List(data.reduce(reducer.asInstanceOf[(Any, Any) => Any]))
+      case UnionDataset(lhs, rhs) =>
+        val seed = getSeed(lhs, rhs, transformationToPerform)
+        data ++ requestDataOverNetwork(rhs, PartialSampling(getExecutorIndex, thisStagePartitions.sum, seed))
+      case IntersectionDataset(_, rhs) =>
+        val rhsData = requestDataOverNetwork(rhs, FullSampling())
+        data.filter(x => rhsData.contains(x))
+      case CartesianDataset(_, rhs) =>
+        val rhsData = requestDataOverNetwork(rhs, FullSampling())
+        data.flatMap(x => rhsData.map(y => (x, y)))
+      case IsSavingSeqFileOkDataset(_, dir, name) =>
+        val serial = SerializationUtils.serialize(data)
+        List(
+          HDFSUtil.createNewHDFSFile(
+            Paths.get(dir, name + Context.getNodeId + executorId + ".dat").toString,
+            serial,
+            Some(hdfsBarrier)
+          ))
+      case _ =>
+        throw new RuntimeException("unexpected intermediate or final transformation")
     }
+  }
 
-    // wait for the downstream executors to fetch data
-    println(s"thread $executorId at node ${Context.getNodeId} has ${current.length} records")
+  private def requestDataOverNetwork(targetDataset: Dataset[_], samplingType: SamplingType): List[_] = {
+    val arrayBuffer     = new ArrayBuffer[Any]()
+    val targetDatasetID = Context.getOrAssignDatasetID(targetDataset)
 
-    val numDownstreamExecutor = downstreamPartitions.sum
-    val sliced = if (current.length % numDownstreamExecutor == 0) {
-      current.grouped(current.length / numDownstreamExecutor)
-    } else {
-      current.grouped(current.length / numDownstreamExecutor + 1)
-    }
-
-    val packed = sliced.toArray map { SerializationUtils.serialize(_) }
-
-    // set up the tcp server
-    val fetched              = Array.fill(numDownstreamExecutor)(false)
-    var numFetchedDownstream = 0
-    var allFetched           = false
-
-    while (!allFetched) {
-      val socket                   = server.accept()
-      val message                  = SocketWrapper.recvBinaryMessage(socket)
-      val (dsNodeId, dsExecutorId) = SerializationUtils.deserialize(message).asInstanceOf[(Int, Int)]
-      val downstreamIndex          = downstreamPartitions.take(dsNodeId).sum + dsExecutorId
-
-      val data = packed(downstreamIndex)
-      SocketWrapper.sendBinaryMessage(socket, data)
-      if (!fetched(downstreamIndex)) {
-        fetched(downstreamIndex) = true
-        numFetchedDownstream += 1
-        allFetched ||= numFetchedDownstream == numDownstreamExecutor
+    for (contact <- Context.getDataServerContacts) {
+      Logger.getGlobal.info(s"requesting data from $contact, target dataset $targetDatasetID")
+      val socket = new Socket().connectChaining(contact)
+      socket.sendToySparkMessage(DataRequest(targetDatasetID, samplingType)).recvToySparkMessage() match {
+        case DataResponse(payload) => arrayBuffer.appendAll(payload)
+        case _                     => throw new RuntimeException("unexpected response")
       }
       socket.close()
+      Logger.getGlobal.info(s"received data from $contact, target dataset $targetDatasetID")
     }
-
-    // now all downstream executors get their data, can return now
+    arrayBuffer.toList
   }
 }

@@ -2,7 +2,9 @@ package toyspark.utilities
 
 import org.json4s.native.JsonMethods.parse
 
-final case class Config(master: (String, Int), workers: List[String])
+final case class Config(master: (String, Int), workers: List[String]) {
+  def getNodesIPs: List[String] = master._1 :: workers
+}
 
 object Config {
   def fromJsonFile(pathname: String): Config = {
