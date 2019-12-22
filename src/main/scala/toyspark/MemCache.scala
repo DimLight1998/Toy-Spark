@@ -1,0 +1,5 @@
+package toyspark
+
+object MemCache {
+
+}

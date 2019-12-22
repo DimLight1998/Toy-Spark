@@ -6,8 +6,6 @@ import java.net._
 
 import toyspark.utilities.Config
 
-import scala.collection.parallel.ParIterable
-
 object Context {
   private var _nodeId: Int                                    = _ // ID for this node, start from 0 (used by master)
   private var _ctrlServerSocket: ServerSocket                 = _ // only available for master, handles control request
@@ -17,6 +15,7 @@ object Context {
   private val _datasetIDMap: MutHashMap[Dataset[_], Int]      = MutHashMap()
   private var _nextDatasetID: Int                             = 0
   private val _sendingBuffer: ParHashMap[(Int, Int), List[_]] = ParHashMap()
+  private val _memCache: ParHashMap[(Int, Int), List[_]]      = ParHashMap()
 
   def setNodeId(nodeId: Int): Unit = { _nodeId = nodeId }
   def getNodeId: Int               = _nodeId
@@ -54,7 +53,11 @@ object Context {
     val filteredKeys = _sendingBuffer.keys.filter({ case (entryDsID, _) => entryDsID == datasetID }).toList
     filteredKeys.map(key => _sendingBuffer(key))
   }
-  def removeSendingBufferEntryByDatasetID(datasetID: Int): Unit = {
-    ???
+
+  def setMemCacheEntry(datasetID: Int, partitionID: Int, data: List[_]): Unit = {
+    _memCache((datasetID, partitionID)) = data
   }
+  def getMemCacheEntry(datasetID: Int, partitionID: Int): List[_] = _memCache((datasetID, partitionID))
+
+  def isMemCached(datasetID: Int): Boolean = _memCache.exists({ case ((dsID, _), _) => dsID == datasetID })
 }
