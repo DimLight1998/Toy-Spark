@@ -16,8 +16,13 @@ abstract class Action[T] {
     // split stages then ensure every dataset in stages has an ID
     val (stages, fetchTargetDataset) = splitStagesDAG(this)
     stages.foreach({ case (datasets, _) => datasets.foreach(dataset => Context.getOrAssignDatasetID(dataset)) })
-    // performStages
-    performStages(stages)
+
+    // perform stages
+    for (i <- stages.indices) {
+      performStage(stages(i), i)
+    }
+
+    // return the dataset for final fetching
     fetchTargetDataset
   }
 
@@ -26,55 +31,50 @@ abstract class Action[T] {
     fetchFinalArrayBuffer(fetchTargetDataset)
   }
 
-  private def performStages(stages: List[Stage]): Unit = {
-    // start a communicator to handle data transferring
-    new Thread(Communicator()).start()
+  private def performStage(stage: Stage, iDebug: Int): Unit = {
+    val (datasets, partitions) = stage
+    val numLocalPartition      = partitions(Context.getNodeId)
+    val barrier                = new CyclicBarrier(numLocalPartition + 1)
+    val hdfsBarrier            = new CyclicBarrier(numLocalPartition)
 
-    for (i <- stages.indices) {
-      val (datasets, partitions) = stages(i)
-      val numLocalPartition      = partitions(Context.getNodeId)
-      val barrier                = new CyclicBarrier(numLocalPartition + 1)
-      val hdfsBarrier            = new CyclicBarrier(numLocalPartition)
+    val threads =
+      (0 until numLocalPartition).map(i => new Thread(Executor(datasets, i, partitions, barrier, hdfsBarrier)))
+    threads.foreach(t => t.start())
 
-      val threads =
-        (0 until numLocalPartition).map(i => new Thread(Executor(datasets, i, partitions, barrier, hdfsBarrier)))
-      threads.foreach(t => t.start())
+    Logger.getGlobal.info(s"stage $iDebug started...")
+    barrier.await()
+    Logger.getGlobal.info(s"stage $iDebug finished locally, reporting to master...")
 
-      Logger.getGlobal.info(s"stage $i started...")
-      barrier.await()
-      Logger.getGlobal.info(s"stage $i finished locally, reporting to master...")
-
-      if (Context.isMaster) {
-        // receive finishing message from workers, then echo
-        var numReported     = 1                     // include myself
-        val incomingSockets = ArrayBuffer[Socket]() // save incoming sockets
-        while (numReported < Context.getNumNodes) {
-          val incomingSocket = Context.getCtrlServerSocket.accept()
-          val message        = incomingSocket.recvToySparkMessage()
-          message match {
-            case StageFinished(nodeID) =>
-              Logger.getGlobal.info(s"node $nodeID finished stage $i")
-              numReported += 1
-              incomingSockets += incomingSocket
-            case _ => throw new RuntimeException("unexpected message type")
-          }
+    if (Context.isMaster) {
+      // receive finishing message from workers, then echo
+      var numReported     = 1                     // include myself
+      val incomingSockets = ArrayBuffer[Socket]() // save incoming sockets
+      while (numReported < Context.getNumNodes) {
+        val incomingSocket = Context.getCtrlServerSocket.accept()
+        val message        = incomingSocket.recvToySparkMessage()
+        message match {
+          case StageFinished(nodeID) =>
+            Logger.getGlobal.info(s"node $nodeID finished stage $iDebug")
+            numReported += 1
+            incomingSockets += incomingSocket
+          case _ => throw new RuntimeException("unexpected message type")
         }
-
-        for (incomingSocket <- incomingSockets) {
-          incomingSocket.sendToySparkMessage(StageFinishedAck())
-          incomingSocket.close()
-        }
-      } else {
-        // send a message to master that we are finished
-        val (masterAddr, masterPort) = Context.getConfig.master
-        val socket                   = new Socket(masterAddr, masterPort)
-        socket.sendToySparkMessage(StageFinished(Context.getNodeId))
-        socket.recvToySparkMessage() match {
-          case StageFinishedAck() => Logger.getGlobal.info(s"stage $i finished ACK received")
-          case _                  => throw new RuntimeException("unexpected message type")
-        }
-        socket.close()
       }
+
+      for (incomingSocket <- incomingSockets) {
+        incomingSocket.sendToySparkMessage(StageFinishedAck())
+        incomingSocket.close()
+      }
+    } else {
+      // send a message to master that we are finished
+      val (masterAddr, masterPort) = Context.getConfig.master
+      val socket                   = new Socket(masterAddr, masterPort)
+      socket.sendToySparkMessage(StageFinished(Context.getNodeId))
+      socket.recvToySparkMessage() match {
+        case StageFinishedAck() => Logger.getGlobal.info(s"stage $iDebug finished ACK received")
+        case _                  => throw new RuntimeException("unexpected message type")
+      }
+      socket.close()
     }
   }
 

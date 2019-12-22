@@ -18,6 +18,7 @@ object Main {
     val joint     = lhs.unionWith(mappedRHS)
 
     print(joint.collect(Nil).mkString(", "))
+    print(joint.count())
 
     Communication.close()
   }

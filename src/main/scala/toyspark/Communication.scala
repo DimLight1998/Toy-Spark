@@ -47,6 +47,9 @@ object Communication {
     } else {
       workerInitialize(Context.getNodeId, config)
     }
+
+    // start a communicator to handle data transferring
+    new Thread(Communicator()).start()
   }
 
   def masterInitialize(config: Config): Unit = {
