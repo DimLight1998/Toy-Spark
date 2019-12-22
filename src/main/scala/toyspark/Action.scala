@@ -1,7 +1,6 @@
 package toyspark
 
 import scala.collection.mutable.ArrayBuffer
-import scala.util.Random
 import java.net.Socket
 import java.util.concurrent.CyclicBarrier
 import java.util.logging.Logger

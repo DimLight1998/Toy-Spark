@@ -50,8 +50,8 @@ object Context {
     _sendingBuffer((datasetID, partitionID)) = data
   }
   def getSendingBufferEntry(datasetID: Int, partitionID: Int): List[_] = _sendingBuffer((datasetID, partitionID))
-  def getSendingBufferDataByDatasetID(datasetID: Int): ParIterable[List[_]] = {
-    val filteredKeys = _sendingBuffer.keys.filter({ case (entryDsID, _) => entryDsID == datasetID })
+  def getSendingBufferDataByDatasetID(datasetID: Int): List[List[_]] = {
+    val filteredKeys = _sendingBuffer.keys.filter({ case (entryDsID, _) => entryDsID == datasetID }).toList
     filteredKeys.map(key => _sendingBuffer(key))
   }
   def removeSendingBufferEntryByDatasetID(datasetID: Int): Unit = {

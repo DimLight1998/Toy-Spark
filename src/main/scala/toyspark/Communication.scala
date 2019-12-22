@@ -20,6 +20,9 @@ final case class DataRequest(targetDatasetID: Int, samplingType: SamplingType) e
 final case class DataResponse(payload: List[Any])                              extends ToySparkMessage
 final case class StageFinished(nodeID: Int)                                    extends ToySparkMessage
 final case class StageFinishedAck()                                            extends ToySparkMessage
+final case class ComputationFinished(nodeID: Int)                              extends ToySparkMessage
+final case class ComputationFinishedAck()                                      extends ToySparkMessage
+final case class CommunicatorShutdown()                                        extends ToySparkMessage
 
 object Communication {
   implicit class CommunicationK(val socket: Socket) {
@@ -113,5 +116,40 @@ object Communication {
 
   def dataServerPortsToContracts(config: Config, dataServerPorts: Array[Int]): Array[InetSocketAddress] = {
     config.getNodesIPs.zip(dataServerPorts).map({ case (ip, port) => new InetSocketAddress(ip, port) }).toArray
+  }
+
+  def close(): Unit = {
+    if (Context.isMaster) {
+      // wait for workers
+      var numReadyNodes   = 1
+      val incomingSockets = MutSet[Socket]()
+      while (numReadyNodes < Context.getNumNodes) {
+        val incomingSocket = Context.getCtrlServerSocket.accept()
+        incomingSocket.recvToySparkMessage() match {
+          case ComputationFinished(nodeID) => Logger.getGlobal.info(s"node $nodeID finished")
+          case _                           => throw new RuntimeException("unexpected message type")
+        }
+        incomingSockets.add(incomingSocket)
+        numReadyNodes += 1
+      }
+      incomingSockets.foreach(socket => {
+        socket.sendToySparkMessage(ComputationFinishedAck())
+        socket.close()
+      })
+    } else {
+      // tell master we are done
+      val (masterAddr, masterPort) = Context.getConfig.master
+      val ctrlClientSocket         = new Socket(masterAddr, masterPort)
+      ctrlClientSocket.sendToySparkMessage(ComputationFinished(Context.getNodeId)).recvToySparkMessage() match {
+        case ComputationFinishedAck() => Logger.getGlobal.info("computing finished ack received")
+        case _                        => throw new RuntimeException("unexpected message type")
+      }
+      ctrlClientSocket.close()
+    }
+
+    // tell data server to stop
+    val localShutdownSocket = new Socket().connectChaining(Context.getDataServerContacts(Context.getNodeId))
+    localShutdownSocket.sendToySparkMessage(CommunicatorShutdown())
+    localShutdownSocket.close()
   }
 }
