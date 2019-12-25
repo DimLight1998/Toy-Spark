@@ -17,7 +17,7 @@ abstract class Dataset[T] {
   def saveAsSequenceFile(dir: String, name: String): Boolean = SaveAsSequenceFileAction(this, dir, name).perform()
 
   // misc.
-  def save(): Unit = ???
+  def save(): Unit = Context.addMemCacheMark(Context.cread(this))
 }
 
 object Dataset {
@@ -38,3 +38,4 @@ case class CartesianDataset[T, U](lhs: Dataset[T], rhs: Dataset[U])             
 case class LocalCountDataset[T](upstream: Dataset[T])                                   extends Dataset[T]
 case class IsSavingSeqFileOkDataset[T](upstream: Dataset[T], dir: String, name: String) extends Dataset[T]
 case class LocalReduceDataset[T](upstream: Dataset[T], reducer: (T, T) => T)            extends Dataset[T]
+case class MemCacheDataset[T](wrapping: Dataset[T])                                     extends Dataset[T]

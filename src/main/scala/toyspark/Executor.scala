@@ -25,16 +25,23 @@ final case class Executor(datasets: List[Dataset[_]],
 
     val initialData    = getInitialData(datasets.head)
     val finalData      = datasets.tail.foldLeft(initialData)((iter, trans) => performTransformation(trans, iter))
-    val finalDatasetID = Context.getOrAssignDatasetID(datasets.last)
+    val finalDatasetID = Context.cread(datasets.last)
     Context.setSendingBufferEntry(finalDatasetID, executorId, finalData)
     barrier.await()
   }
 
   private def getExecutorIndex: Int               = executorId + thisStagePartitions.take(Context.getNodeId).sum
   private def getSeed(datasets: Dataset[_]*): Int = datasets.toList.hashCode()
+  private def saveToMemCache(dataset: Dataset[_], data: List[_]): Unit = {
+    val datasetID = Context.cread(dataset)
+    if (Context.hasMemCacheMark(datasetID) && !Context.hasMemCacheEntry(datasetID, executorId)) {
+      Context.setMemCacheEntry(datasetID, executorId, data)
+    }
+  }
 
   private def getInitialData(headDataset: Dataset[_]): List[_] = {
-    headDataset match {
+    val ret = headDataset match {
+      case MemCacheDataset(wrapping) => Context.getMemCacheEntry(Context.cread(wrapping), executorId)
       case GeneratedDataset(_, generator) =>
         generator(Context.getNodeId, executorId)
       case ReadDataset(partitions, dataFile, dtype) =>
@@ -54,11 +61,13 @@ final case class Executor(datasets: List[Dataset[_]],
         requestDataOverNetwork(ups, PartialSampling(getExecutorIndex, thisStagePartitions.sum, seed))
       case _ => throw new RuntimeException("unexpected initial dataset")
     }
+
+    saveToMemCache(headDataset, ret)
+    ret
   }
 
   private def performTransformation(transformationToPerform: Dataset[_], data: List[_]): List[_] = {
-    // todo while computing, handle `save`
-    transformationToPerform match {
+    val ret = transformationToPerform match {
       case MappedDataset(_, mapper)       => data.map(mapper.asInstanceOf[Any => Any])
       case FilteredDataset(_, pred)       => data.filter(pred.asInstanceOf[Any => Boolean])
       case LocalCountDataset(_)           => List(data.length)
@@ -83,11 +92,14 @@ final case class Executor(datasets: List[Dataset[_]],
       case _ =>
         throw new RuntimeException("unexpected intermediate or final transformation")
     }
+
+    saveToMemCache(transformationToPerform, ret)
+    ret
   }
 
   private def requestDataOverNetwork(targetDataset: Dataset[_], samplingType: SamplingType): List[_] = {
     val arrayBuffer     = new ArrayBuffer[Any]()
-    val targetDatasetID = Context.getOrAssignDatasetID(targetDataset)
+    val targetDatasetID = Context.cread(targetDataset)
 
     for (contact <- Context.getDataServerContacts) {
       Logger.getGlobal.info(s"requesting data from $contact, target dataset $targetDatasetID")

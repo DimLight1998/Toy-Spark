@@ -1,7 +1,7 @@
 package toyspark
 
 import scala.collection.parallel.mutable.ParHashMap
-import scala.collection.mutable.{HashMap => MutHashMap}
+import scala.collection.mutable.{HashMap => MutHashMap, Set => MutSet}
 import java.net._
 
 import toyspark.utilities.Config
@@ -16,6 +16,7 @@ object Context {
   private var _nextDatasetID: Int                             = 0
   private val _sendingBuffer: ParHashMap[(Int, Int), List[_]] = ParHashMap()
   private val _memCache: ParHashMap[(Int, Int), List[_]]      = ParHashMap()
+  private val _shouldBeMemCached: MutSet[Int]                 = MutSet()
 
   def setNodeId(nodeId: Int): Unit = { _nodeId = nodeId }
   def getNodeId: Int               = _nodeId
@@ -37,7 +38,8 @@ object Context {
   def getConfig: Config               = _config
   def getNumNodes: Int                = _config.workers.length + 1
 
-  def getOrAssignDatasetID(dataset: Dataset[_]): Int = {
+  // cread: create if not exist, otherwise read
+  def cread(dataset: Dataset[_]): Int = {
     if (!_datasetIDMap.contains(dataset)) {
       _datasetIDMap(dataset) = _nextDatasetID
       _nextDatasetID += 1
@@ -58,6 +60,10 @@ object Context {
     _memCache((datasetID, partitionID)) = data
   }
   def getMemCacheEntry(datasetID: Int, partitionID: Int): List[_] = _memCache((datasetID, partitionID))
+  def hasMemCacheEntry(datasetID: Int, partitionID: Int): Boolean = _memCache.contains((datasetID, partitionID))
 
-  def isMemCached(datasetID: Int): Boolean = _memCache.exists({ case ((dsID, _), _) => dsID == datasetID })
+  def hasMemCache(datasetID: Int): Boolean = _memCache.exists({ case ((dsID, _), _) => dsID == datasetID })
+
+  def addMemCacheMark(datasetID: Int): Unit    = _shouldBeMemCached.add(datasetID)
+  def hasMemCacheMark(datasetID: Int): Boolean = _shouldBeMemCached.contains(datasetID)
 }

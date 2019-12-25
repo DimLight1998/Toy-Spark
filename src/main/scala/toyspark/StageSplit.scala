@@ -7,7 +7,7 @@ import TypeAliases._
 object StageSplit {
   type StageAlt = (List[Dataset[_]], Option[PartitionSchema])
 
-  private def getActionUpstream(action: Action[_]): Dataset[_] = action match {
+  def getActionUpstream(action: Action[_]): Dataset[_] = action match {
     case CollectAction(upstream, _)                    => upstream
     case CountAction(upstream)                         => LocalCountDataset(upstream)
     case TakeAction(upstream, _, _)                    => upstream
@@ -15,22 +15,43 @@ object StageSplit {
     case ReduceAction(upstream, reducer, _)            => LocalReduceDataset(upstream, reducer)
   }
 
-  def splitStagesDAG[_](action: Action[_]): (List[Stage], Dataset[_]) = {
+  @tailrec
+  def getPartitions(dataset: Dataset[_]): List[Int] = {
+    dataset match {
+      case GeneratedDataset(partitions, _)          => partitions
+      case ReadDataset(partitions, _, _)            => partitions
+      case MappedDataset(upstream, _)               => getPartitions(upstream)
+      case FilteredDataset(upstream, _)             => getPartitions(upstream)
+      case RepartitionDataset(_, partitions)        => partitions
+      case UnionDataset(lhs, _)                     => getPartitions(lhs)
+      case IntersectionDataset(lhs, _)              => getPartitions(lhs)
+      case CartesianDataset(lhs, _)                 => getPartitions(lhs)
+      case LocalCountDataset(upstream)              => getPartitions(upstream)
+      case IsSavingSeqFileOkDataset(upstream, _, _) => getPartitions(upstream)
+      case LocalReduceDataset(upstream, _)          => getPartitions(upstream)
+    }
+  }
+
+  def splitStagesDAG[_](action: Action[_], substituteCached: Boolean): (List[Stage], Dataset[_]) = {
     val actionUpstream = getActionUpstream(action)
 
     def splitAux(curDs: Dataset[_], allAcc: List[Stage], curAcc: List[Dataset[_]]): List[Stage] = {
-      curDs match {
-        case GeneratedDataset(partitions, _)     => (curDs :: curAcc, partitions) :: allAcc
-        case ReadDataset(partitions, _, _)       => (curDs :: curAcc, partitions) :: allAcc
-        case MappedDataset(ups, _)               => splitAux(ups, allAcc, curDs :: curAcc)
-        case FilteredDataset(ups, _)             => splitAux(ups, allAcc, curDs :: curAcc)
-        case RepartitionDataset(ups, partitions) => splitAux(ups, (curDs :: curAcc, partitions) :: allAcc, Nil)
-        case UnionDataset(lhs, rhs)              => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)
-        case IntersectionDataset(lhs, rhs)       => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)
-        case CartesianDataset(lhs, rhs)          => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)
-        case LocalCountDataset(ups)              => splitAux(ups, allAcc, curDs :: curAcc)
-        case IsSavingSeqFileOkDataset(ups, _, _) => splitAux(ups, allAcc, curDs :: curAcc)
-        case LocalReduceDataset(ups, _)          => splitAux(ups, allAcc, curDs :: curAcc)
+      if (substituteCached && Context.hasMemCache(Context.cread(curDs))) {
+        (MemCacheDataset(curDs) :: curAcc, getPartitions(curDs)) :: allAcc
+      } else {
+        curDs match {
+          case GeneratedDataset(partitions, _)     => (curDs :: curAcc, partitions) :: allAcc
+          case ReadDataset(partitions, _, _)       => (curDs :: curAcc, partitions) :: allAcc
+          case MappedDataset(ups, _)               => splitAux(ups, allAcc, curDs :: curAcc)
+          case FilteredDataset(ups, _)             => splitAux(ups, allAcc, curDs :: curAcc)
+          case RepartitionDataset(ups, partitions) => splitAux(ups, (curDs :: curAcc, partitions) :: allAcc, Nil)
+          case UnionDataset(lhs, rhs)              => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)
+          case IntersectionDataset(lhs, rhs)       => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)
+          case CartesianDataset(lhs, rhs)          => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)
+          case LocalCountDataset(ups)              => splitAux(ups, allAcc, curDs :: curAcc)
+          case IsSavingSeqFileOkDataset(ups, _, _) => splitAux(ups, allAcc, curDs :: curAcc)
+          case LocalReduceDataset(ups, _)          => splitAux(ups, allAcc, curDs :: curAcc)
+        }
       }
     }
 

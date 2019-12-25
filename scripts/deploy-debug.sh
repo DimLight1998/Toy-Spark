@@ -1,3 +1,4 @@
+trap "exit" INT
 sbt assembly
 
 for x in dbvps-{1,2,3}; do

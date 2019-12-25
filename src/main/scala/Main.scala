@@ -1,5 +1,3 @@
-import scala.util.Random
-
 import toyspark._
 
 object Main {
@@ -14,8 +12,10 @@ object Main {
     val rhs = Dataset.generate(
       List(2, 3, 3),
       (nodeID, localPartitionID) => (0 until 2000).toList.map(i => i + localPartitionID * 10000 + nodeID * 100000))
-    val mappedRHS = rhs.map(x => -3 * x).repartition(List(4, 2, 2)).filter(x => x % 2 == 0)
-    val joint     = lhs.unionWith(mappedRHS)
+    val mappedRHS = rhs.map(x => -3 * x)
+    val filteredRHS = mappedRHS.repartition(List(4, 2, 2)).filter(x => x % 2 == 0)
+    val joint = lhs.unionWith(filteredRHS)
+    joint.save()
 
     println(joint.collect(Nil).mkString(", "))
     println(joint.count())

@@ -14,12 +14,16 @@ import toyspark.TypeAliases.Stage
 abstract class Action[T] {
   def performOnly(): Dataset[_] = {
     // split stages then ensure every dataset in stages has an ID
-    val (stages, fetchTargetDataset) = splitStagesDAG(this)
-    stages.foreach({ case (datasets, _) => datasets.foreach(dataset => Context.getOrAssignDatasetID(dataset)) })
+    def ensureHavingIDs(stage: Stage): Unit = stage._1.foreach(dataset => Context.cread(dataset))
+
+    val (stages, _) = splitStagesDAG(this, substituteCached = false)
+    stages.foreach(ensureHavingIDs)
+    val (substitutedStages, fetchTargetDataset) = splitStagesDAG(this, substituteCached = true)
+    substitutedStages.foreach(ensureHavingIDs)
 
     // perform stages
-    for (i <- stages.indices) {
-      performStage(stages(i), i)
+    for (i <- substitutedStages.indices) {
+      performStage(substitutedStages(i), i)
     }
 
     // return the dataset for final fetching
@@ -82,7 +86,7 @@ abstract class Action[T] {
     // todo move
     def requestDataOverNetwork(targetDataset: Dataset[_], samplingType: SamplingType): List[_] = {
       val arrayBuffer     = new ArrayBuffer[Any]()
-      val targetDatasetID = Context.getOrAssignDatasetID(targetDataset)
+      val targetDatasetID = Context.cread(targetDataset)
 
       for (contact <- Context.getDataServerContacts) {
         val socket = new Socket().connectChaining(contact)
