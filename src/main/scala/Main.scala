@@ -44,12 +44,17 @@ object Main {
     println(samplesInCommon)
   }
 
-  def main(args: Array[String]): Unit = {
-    Communication.initialize(args)
-
+  def flatMapTest(): Unit = {
     val a = Dataset.generate(List(2, 3, 3), (nid, pid) => List(s"[$nid $pid]", s"($nid $pid)", s"{$nid, $pid}"))
     val b = a.flatMap(x => List(s"<$x>", s"<<$x>>", s"<<<$x>>>"))
     println(b.collect(Nil))
+  }
+
+  def main(args: Array[String]): Unit = {
+    Communication.initialize(args)
+
+    val a = Dataset.generate(List(4, 4, 4), (_, _) => List.fill(1000)(Random.nextInt(100)))
+    println(a.distinct().collect(Nil))
 
     Communication.close()
   }

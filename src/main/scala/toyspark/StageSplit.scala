@@ -22,8 +22,10 @@ object StageSplit {
       case ReadDataset(partitions, _, _)            => partitions
       case MappedDataset(upstream, _)               => getPartitions(upstream)
       case FlatMappedDataset(upstream, _)           => getPartitions(upstream)
+      case LocalDistinctDataset(upstream)           => getPartitions(upstream)
       case FilteredDataset(upstream, _)             => getPartitions(upstream)
       case RepartitionDataset(_, partitions)        => partitions
+      case HashShuffleDataset(upstream)             => getPartitions(upstream)
       case UnionDataset(lhs, _)                     => getPartitions(lhs)
       case IntersectionDataset(lhs, _)              => getPartitions(lhs)
       case CartesianDataset(lhs, _)                 => getPartitions(lhs)
@@ -45,8 +47,10 @@ object StageSplit {
           case ReadDataset(partitions, _, _)       => (curDs :: curAcc, partitions) :: allAcc
           case MappedDataset(ups, _)               => splitAux(ups, allAcc, curDs :: curAcc)
           case FlatMappedDataset(ups, _)           => splitAux(ups, allAcc, curDs :: curAcc)
+          case LocalDistinctDataset(ups)           => splitAux(ups, allAcc, curDs :: curAcc)
           case FilteredDataset(ups, _)             => splitAux(ups, allAcc, curDs :: curAcc)
           case RepartitionDataset(ups, partitions) => splitAux(ups, (curDs :: curAcc, partitions) :: allAcc, Nil)
+          case HashShuffleDataset(u)               => splitAux(u, (curDs :: curAcc, getPartitions(u)) :: allAcc, Nil)
           case UnionDataset(lhs, rhs)              => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)
           case IntersectionDataset(lhs, rhs)       => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)
           case CartesianDataset(lhs, rhs)          => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)

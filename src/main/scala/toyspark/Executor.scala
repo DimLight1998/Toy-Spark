@@ -59,7 +59,9 @@ final case class Executor(datasets: List[Dataset[_]],
         hdfsData.slice(index * slices, min(len, (index + 1) * slices))
       case RepartitionDataset(ups, _) =>
         val seed = getSeed(headDataset, ups)
-        requestDataOverNetwork(ups, PartialSampling(getExecutorIndex, thisStagePartitions.sum, seed))
+        requestDataOverNetwork(ups, RandomSampling(getExecutorIndex, thisStagePartitions.sum, seed))
+      case HashShuffleDataset(ups) =>
+        requestDataOverNetwork(ups, HashSampling(getExecutorIndex, thisStagePartitions.sum))
       case _ => throw new RuntimeException("unexpected initial dataset")
     }
 
@@ -71,12 +73,13 @@ final case class Executor(datasets: List[Dataset[_]],
     val ret = transformationToPerform match {
       case MappedDataset(_, mapper)       => data.map(mapper.asInstanceOf[Any => Any])
       case FlatMappedDataset(_, mapper)   => data.flatMap(mapper.asInstanceOf[Any => Iterable[Any]])
+      case LocalDistinctDataset(_)        => data.distinct
       case FilteredDataset(_, pred)       => data.filter(pred.asInstanceOf[Any => Boolean])
       case LocalCountDataset(_)           => List(data.length)
       case LocalReduceDataset(_, reducer) => List(data.reduce(reducer.asInstanceOf[(Any, Any) => Any]))
       case UnionDataset(lhs, rhs) =>
         val seed = getSeed(lhs, rhs, transformationToPerform)
-        data ++ requestDataOverNetwork(rhs, PartialSampling(getExecutorIndex, thisStagePartitions.sum, seed))
+        data ++ requestDataOverNetwork(rhs, RandomSampling(getExecutorIndex, thisStagePartitions.sum, seed))
       case IntersectionDataset(_, rhs) =>
         val rhsData = requestDataOverNetwork(rhs, FullSampling())
         data.filter(x => rhsData.contains(x))

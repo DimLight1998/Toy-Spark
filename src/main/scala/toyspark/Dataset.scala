@@ -6,7 +6,7 @@ abstract class Dataset[T] {
   def flatMap[U](mapper: T => Iterable[U]): FlatMappedDataset[T, U] = FlatMappedDataset(this, mapper)
   def filter(pred: T => Boolean): FilteredDataset[T]                = FilteredDataset(this, pred)
   def repartition(partitions: List[Int]): RepartitionDataset[T]     = RepartitionDataset(this, partitions)
-  def distinct(): DistinctDataset[T]                                = DistinctDataset(this)
+  def distinct(): LocalDistinctDataset[T]                           = LocalDistinctDataset(HashShuffleDataset(this))
   def unionWith(other: Dataset[T]): UnionDataset[T]                 = UnionDataset(this, other)
   def intersectionWith(other: Dataset[T]): IntersectionDataset[T]   = IntersectionDataset(this, other)
   def cartesianWith[U](other: Dataset[U]): CartesianDataset[T, U]   = CartesianDataset(this, other)
@@ -45,7 +45,8 @@ case class MappedDataset[T, U](upstream: Dataset[T], mapper: T => U)            
 case class FlatMappedDataset[T, U](upstream: Dataset[T], mapper: T => Iterable[U])      extends Dataset[U]
 case class FilteredDataset[T](upstream: Dataset[T], pred: T => Boolean)                 extends Dataset[T]
 case class RepartitionDataset[T](upstream: Dataset[T], partitions: List[Int])           extends Dataset[T]
-case class DistinctDataset[T](upstream: Dataset[T])                                     extends Dataset[T]
+case class HashShuffleDataset[T](upstream: Dataset[T])                                  extends Dataset[T]
+case class LocalDistinctDataset[T](upstream: HashShuffleDataset[T])                     extends Dataset[T]
 case class UnionDataset[T](lhs: Dataset[T], rhs: Dataset[T])                            extends Dataset[T]
 case class IntersectionDataset[T](lhs: Dataset[T], rhs: Dataset[T])                     extends Dataset[T]
 case class CartesianDataset[T, U](lhs: Dataset[T], rhs: Dataset[U])                     extends Dataset[(T, U)]

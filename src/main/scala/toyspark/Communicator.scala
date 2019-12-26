@@ -27,10 +27,14 @@ final case class Communicator() extends Runnable {
   }
 
   private def sendRequestedData(incomingSocket: Socket, targetDatasetID: Int, samplingType: SamplingType): Unit = {
-    def applySampling(entry: List[_], partitionIndex: Int, numPartitions: Int, seed: Int): List[_] = {
+    def applyRandomSampling(entry: List[_], partitionIndex: Int, numPartitions: Int, seed: Int): List[_] = {
       val selectedIndices =
         new Random(seed).shuffle(entry.indices.toList).evenlyPartitioned(numPartitions).toVector(partitionIndex)
       selectedIndices.map(idx => entry(idx))
+    }
+
+    def applyHashSampling(entry: List[_], partitionIndex: Int, numPartitions: Int): List[_] = {
+      entry.filter(e => e.hashCode() % numPartitions == partitionIndex)
     }
 
     new Thread {
@@ -39,8 +43,10 @@ final case class Communicator() extends Runnable {
         val resp = samplingType match {
           case FullSampling() =>
             DataResponse(entries.flatten)
-          case PartialSampling(partitionIndex, numPartitions, seed) =>
-            DataResponse(entries.flatMap(entry => applySampling(entry, partitionIndex, numPartitions, seed)))
+          case RandomSampling(partitionIndex, numPartitions, seed) =>
+            DataResponse(entries.flatMap(entry => applyRandomSampling(entry, partitionIndex, numPartitions, seed)))
+          case HashSampling(partitionIndex, numParittions) =>
+            DataResponse(entries.flatMap(entry => applyHashSampling(entry, partitionIndex, numParittions)))
         }
         incomingSocket.sendToySparkMessage(resp)
         incomingSocket.close()
