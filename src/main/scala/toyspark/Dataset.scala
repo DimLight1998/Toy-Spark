@@ -15,6 +15,7 @@ abstract class Dataset[T] {
   def count(): Int                                           = CountAction(this).perform()
   def take(takeCount: Int, workerRet: List[T]): List[T]      = TakeAction(this, takeCount, workerRet).perform()
   def saveAsSequenceFile(dir: String, name: String): Boolean = SaveAsSequenceFileAction(this, dir, name).perform()
+  def saveAsSingleFile(dir: String, name: String): Boolean   = SaveAsSingleFileAction(this, dir, name).perform()
 
   // misc.
   def save(): Unit = Context.addMemCacheMark(Context.cread(this))

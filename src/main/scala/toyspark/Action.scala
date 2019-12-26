@@ -2,6 +2,7 @@ package toyspark
 
 import scala.collection.mutable.ArrayBuffer
 import java.net.Socket
+import java.nio.file.Paths
 import java.util.concurrent.CyclicBarrier
 import java.util.logging.Logger
 
@@ -9,6 +10,7 @@ import utilities._
 import StageSplit._
 import Communication._
 import SocketWrapper._
+import org.apache.commons.lang3.SerializationUtils
 import toyspark.TypeAliases.Stage
 
 abstract class Action[T] {
@@ -154,6 +156,20 @@ case class SaveAsSequenceFileAction[T](upstream: Dataset[T], dir: String, name: 
   def perform(): Boolean = {
     if (Context.isMaster) {
       performAndFetchFinal().toList.reduce(_ && _)
+    } else {
+      performOnly()
+      false
+    }
+  }
+}
+
+case class SaveAsSingleFileAction[T](upstream: Dataset[T], dir: String, name: String) extends Action[Boolean] {
+  def perform(): Boolean = {
+    if (Context.isMaster) {
+      val data = performAndFetchFinal().toList
+      val serial = SerializationUtils.serialize(data)
+      HDFSUtil.createNewHDFSFile(Paths.get(dir, name).toString, serial)
+      true
     } else {
       performOnly()
       false
