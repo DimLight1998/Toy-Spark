@@ -2,9 +2,7 @@ import scala.util.Random
 import toyspark._
 
 object Main {
-  def main(args: Array[String]): Unit = {
-    Communication.initialize(args)
-
+  def xxast(): Unit = {
     // generate x
     val xs1 = Dataset.generate(List(4, 4, 4), (_, fragID) => {
       println(s"fragment $fragID is generating data for x!")
@@ -44,6 +42,14 @@ object Main {
     println(s"estimated area size: ${(numPointsInCommon * 4).toDouble / numPoints.toDouble}")
     println(s"actual area size: ${2 * Math.PI - 3 * Math.atan(2) - 2}")
     println(samplesInCommon)
+  }
+
+  def main(args: Array[String]): Unit = {
+    Communication.initialize(args)
+
+    val a = Dataset.generate(List(2, 3, 3), (nid, pid) => List(s"[$nid $pid]", s"($nid $pid)", s"{$nid, $pid}"))
+    val b = a.flatMap(x => List(s"<$x>", s"<<$x>>", s"<<<$x>>>"))
+    println(b.collect(Nil))
 
     Communication.close()
   }

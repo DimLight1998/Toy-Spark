@@ -21,6 +21,7 @@ object StageSplit {
       case GeneratedDataset(partitions, _)          => partitions
       case ReadDataset(partitions, _, _)            => partitions
       case MappedDataset(upstream, _)               => getPartitions(upstream)
+      case FlatMappedDataset(upstream, _)           => getPartitions(upstream)
       case FilteredDataset(upstream, _)             => getPartitions(upstream)
       case RepartitionDataset(_, partitions)        => partitions
       case UnionDataset(lhs, _)                     => getPartitions(lhs)
@@ -43,6 +44,7 @@ object StageSplit {
           case GeneratedDataset(partitions, _)     => (curDs :: curAcc, partitions) :: allAcc
           case ReadDataset(partitions, _, _)       => (curDs :: curAcc, partitions) :: allAcc
           case MappedDataset(ups, _)               => splitAux(ups, allAcc, curDs :: curAcc)
+          case FlatMappedDataset(ups, _)           => splitAux(ups, allAcc, curDs :: curAcc)
           case FilteredDataset(ups, _)             => splitAux(ups, allAcc, curDs :: curAcc)
           case RepartitionDataset(ups, partitions) => splitAux(ups, (curDs :: curAcc, partitions) :: allAcc, Nil)
           case UnionDataset(lhs, rhs)              => splitAux(rhs, Nil, Nil) ++ splitAux(lhs, allAcc, curDs :: curAcc)

@@ -70,6 +70,7 @@ final case class Executor(datasets: List[Dataset[_]],
   private def performTransformation(transformationToPerform: Dataset[_], data: List[_]): List[_] = {
     val ret = transformationToPerform match {
       case MappedDataset(_, mapper)       => data.map(mapper.asInstanceOf[Any => Any])
+      case FlatMappedDataset(_, mapper)   => data.flatMap(mapper.asInstanceOf[Any => Iterable[Any]])
       case FilteredDataset(_, pred)       => data.filter(pred.asInstanceOf[Any => Boolean])
       case LocalCountDataset(_)           => List(data.length)
       case LocalReduceDataset(_, reducer) => List(data.reduce(reducer.asInstanceOf[(Any, Any) => Any]))
