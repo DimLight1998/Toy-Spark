@@ -11,6 +11,7 @@ import toyspark.Communication._
 import TypeAliases._
 import java.nio.file.Paths
 import java.util.logging.Logger
+import toyspark.utilities.Extensions._
 
 final case class Executor(datasets: List[Dataset[_]],
                           executorId: Int,
@@ -62,6 +63,8 @@ final case class Executor(datasets: List[Dataset[_]],
         requestDataOverNetwork(ups, RandomSampling(getExecutorIndex, thisStagePartitions.sum, seed))
       case HashShuffleDataset(ups) =>
         requestDataOverNetwork(ups, HashSampling(getExecutorIndex, thisStagePartitions.sum))
+      case PairHashShuffleDataset(ups) =>
+        requestDataOverNetwork(ups, PairHashSampling(getExecutorIndex, thisStagePartitions.sum))
       case _ => throw new RuntimeException("unexpected initial dataset")
     }
 
@@ -74,6 +77,7 @@ final case class Executor(datasets: List[Dataset[_]],
       case MappedDataset(_, mapper)       => data.map(mapper.asInstanceOf[Any => Any])
       case FlatMappedDataset(_, mapper)   => data.flatMap(mapper.asInstanceOf[Any => Iterable[Any]])
       case LocalDistinctDataset(_)        => data.distinct
+      case LocalGrouppedByKeyDataset(_)   => data.asInstanceOf[List[(Any, Any)]].groupByKey
       case FilteredDataset(_, pred)       => data.filter(pred.asInstanceOf[Any => Boolean])
       case LocalCountDataset(_)           => List(data.length)
       case LocalReduceDataset(_, reducer) => List(data.reduce(reducer.asInstanceOf[(Any, Any) => Any]))

@@ -22,4 +22,9 @@ object Extensions {
       }
     }
   }
+
+  implicit class TupleListWrapper[T, U](val list: List[(T, U)]) {
+    def groupByKey(): List[(T, List[U])] =
+      list.groupBy({ case (k, v) => k }).map({ case (k, v) => (k, v.map({ case (kk, vv) => vv })) }).toList
+  }
 }

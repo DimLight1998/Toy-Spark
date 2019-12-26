@@ -10,6 +10,9 @@ abstract class Dataset[T] {
   def unionWith(other: Dataset[T]): UnionDataset[T]                 = UnionDataset(this, other)
   def intersectionWith(other: Dataset[T]): IntersectionDataset[T]   = IntersectionDataset(this, other)
   def cartesianWith[U](other: Dataset[U]): CartesianDataset[T, U]   = CartesianDataset(this, other)
+  def groupByKey(): LocalGrouppedByKeyDataset[_]                    = LocalGrouppedByKeyDataset(PairHashShuffleDataset(this))
+  def join(other: Dataset[_]): JointDataset[_]                      = JointDataset(this, other)
+  def reduceByKey(reducer: (_, _) => _): ReducedByKeyDataset[_]     = ReducedByKeyDataset(this, reducer)
 
   // actions
   def reduce(reducer: (T, T) => T, workerRet: T): T          = ReduceAction(this, reducer, workerRet).perform()
@@ -20,16 +23,6 @@ abstract class Dataset[T] {
 
   // misc.
   def save(): Unit = Context.addMemCacheMark(Context.cread(this))
-}
-
-abstract class PairDataset[T, U] extends Dataset[(T, U)] {
-  implicit def convertFromDataset(dataset: Dataset[(T, U)]): PairDataset[T, U] = {
-    dataset.asInstanceOf[PairDataset[T, U]]
-  }
-
-  def groupByKey(): GrouppedByKeyDataset[T, U]                     = GrouppedByKeyDataset(this)
-  def join[K](other: PairDataset[T, K]): JointDataset[T, U, K]     = JointDataset(this, other)
-  def reduceByKey(reducer: (U, U) => U): ReducedByKeyDataset[T, U] = ReducedByKeyDataset(this, reducer)
 }
 
 object Dataset {
@@ -46,7 +39,7 @@ case class FlatMappedDataset[T, U](upstream: Dataset[T], mapper: T => Iterable[U
 case class FilteredDataset[T](upstream: Dataset[T], pred: T => Boolean)                 extends Dataset[T]
 case class RepartitionDataset[T](upstream: Dataset[T], partitions: List[Int])           extends Dataset[T]
 case class HashShuffleDataset[T](upstream: Dataset[T])                                  extends Dataset[T]
-case class LocalDistinctDataset[T](upstream: HashShuffleDataset[T])                     extends Dataset[T]
+case class LocalDistinctDataset[T](upstream: Dataset[T])                                extends Dataset[T]
 case class UnionDataset[T](lhs: Dataset[T], rhs: Dataset[T])                            extends Dataset[T]
 case class IntersectionDataset[T](lhs: Dataset[T], rhs: Dataset[T])                     extends Dataset[T]
 case class CartesianDataset[T, U](lhs: Dataset[T], rhs: Dataset[U])                     extends Dataset[(T, U)]
@@ -54,6 +47,7 @@ case class LocalCountDataset[T](upstream: Dataset[T])                           
 case class IsSavingSeqFileOkDataset[T](upstream: Dataset[T], dir: String, name: String) extends Dataset[T]
 case class LocalReduceDataset[T](upstream: Dataset[T], reducer: (T, T) => T)            extends Dataset[T]
 case class MemCacheDataset[T](wrapping: Dataset[T])                                     extends Dataset[T]
-case class GrouppedByKeyDataset[T, U](upstream: PairDataset[T, U])                      extends PairDataset[T, U]
-case class JointDataset[T, U, K](lhs: PairDataset[T, U], rhs: PairDataset[T, K])        extends PairDataset[T, (U, K)]
-case class ReducedByKeyDataset[T, U](upstream: PairDataset[T, U], reducer: (U, U) => U) extends PairDataset[T, U]
+case class PairHashShuffleDataset[T](upstream: Dataset[_])                              extends Dataset[T]
+case class LocalGrouppedByKeyDataset[T](upstream: Dataset[_])                           extends Dataset[T]
+case class JointDataset[T](lhs: Dataset[T], rhs: Dataset[_])                            extends Dataset[T]
+case class ReducedByKeyDataset[T](upstream: Dataset[_], reducer: (_, _) => _)           extends Dataset[T]

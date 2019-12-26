@@ -50,11 +50,23 @@ object Main {
     println(b.collect(Nil))
   }
 
+  def distinctTest(): Unit = {
+    val a = Dataset.generate(List(4, 4, 4), (_, _) => List.fill(1000)(Random.nextInt(100)))
+    println(a.distinct().collect(Nil))
+  }
+
   def main(args: Array[String]): Unit = {
     Communication.initialize(args)
 
-    val a = Dataset.generate(List(4, 4, 4), (_, _) => List.fill(1000)(Random.nextInt(100)))
-    println(a.distinct().collect(Nil))
+    def gen(): (Int, String) = {
+      val a = Random.nextInt(10)
+      val b = a.toString + Random.nextInt(100)
+      (a, b)
+    }
+    val a = Dataset
+      .generate(List(4, 4, 4), (_, _) => List.fill(20)(gen()))
+      .groupByKey()
+    println(a.collect(Nil))
 
     Communication.close()
   }

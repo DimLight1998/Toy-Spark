@@ -12,6 +12,7 @@ import toyspark.utilities.SocketWrapper._
 abstract class SamplingType
 final case class RandomSampling(partitionIndex: Int, numPartitions: Int, seed: Int) extends SamplingType
 final case class HashSampling(partitionIndex: Int, numPartitions: Int)              extends SamplingType
+final case class PairHashSampling(partitionIndex: Int, numPartitions: Int)          extends SamplingType
 final case class FullSampling()                                                     extends SamplingType
 
 abstract class ToySparkMessage                                                 extends Serializable

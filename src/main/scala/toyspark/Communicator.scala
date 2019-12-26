@@ -33,9 +33,11 @@ final case class Communicator() extends Runnable {
       selectedIndices.map(idx => entry(idx))
     }
 
-    def applyHashSampling(entry: List[_], partitionIndex: Int, numPartitions: Int): List[_] = {
+    def applyHashSampling(entry: List[_], partitionIndex: Int, numPartitions: Int): List[_] =
       entry.filter(e => e.hashCode() % numPartitions == partitionIndex)
-    }
+
+    def applyPairHashSampling(entry: List[_], partitionIndex: Int, numPartitions: Int): List[_] =
+      entry.asInstanceOf[List[(Any, Any)]].filter({ case (k, v) => k.hashCode() % numPartitions == partitionIndex })
 
     new Thread {
       override def run(): Unit = {
@@ -45,8 +47,10 @@ final case class Communicator() extends Runnable {
             DataResponse(entries.flatten)
           case RandomSampling(partitionIndex, numPartitions, seed) =>
             DataResponse(entries.flatMap(entry => applyRandomSampling(entry, partitionIndex, numPartitions, seed)))
-          case HashSampling(partitionIndex, numParittions) =>
-            DataResponse(entries.flatMap(entry => applyHashSampling(entry, partitionIndex, numParittions)))
+          case HashSampling(partitionIndex, numPartitions) =>
+            DataResponse(entries.flatMap(entry => applyHashSampling(entry, partitionIndex, numPartitions)))
+          case PairHashSampling(partitionIndex, numPartitions) =>
+            DataResponse(entries.flatMap(entry => applyPairHashSampling(entry, partitionIndex, numPartitions)))
         }
         incomingSocket.sendToySparkMessage(resp)
         incomingSocket.close()
