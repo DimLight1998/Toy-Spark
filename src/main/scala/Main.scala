@@ -55,9 +55,7 @@ object Main {
     println(a.distinct().collect(Nil))
   }
 
-  def main(args: Array[String]): Unit = {
-    Communication.initialize(args)
-
+  def groupByKeyTest(): Unit = {
     def gen(): (Int, String) = {
       val a = Random.nextInt(10)
       val b = a.toString + Random.nextInt(100)
@@ -66,6 +64,20 @@ object Main {
     val a = Dataset
       .generate(List(4, 4, 4), (_, _) => List.fill(20)(gen()))
       .groupByKey()
+    println(a.collect(Nil))
+  }
+
+  def main(args: Array[String]): Unit = {
+    Communication.initialize(args)
+
+    def gen(): (Int, String) = {
+      val a = Random.nextInt(10)
+      val b = a.toString + "<" + Random.nextInt(100) + ">"
+      (a, b)
+    }
+    val a = Dataset
+      .generate(List(4, 4, 4), (_, _) => List.fill(20)(gen()))
+      .reduceByKey((a: Any, b: Any) => a.asInstanceOf[String] + b.asInstanceOf[String])
     println(a.collect(Nil))
 
     Communication.close()

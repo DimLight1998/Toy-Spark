@@ -77,7 +77,8 @@ final case class Executor(datasets: List[Dataset[_]],
       case MappedDataset(_, mapper)       => data.map(mapper.asInstanceOf[Any => Any])
       case FlatMappedDataset(_, mapper)   => data.flatMap(mapper.asInstanceOf[Any => Iterable[Any]])
       case LocalDistinctDataset(_)        => data.distinct
-      case LocalGrouppedByKeyDataset(_)   => data.asInstanceOf[List[(Any, Any)]].groupByKey
+      case LocalGroupedByKeyDataset(_)   => data.asInstanceOf[List[(Any, Any)]].groupByKey()
+      case LocalReducedByKeyDataset(_, r) => data.asInstanceOf[List[(Any, Any)]].reduceByKey(r)
       case FilteredDataset(_, pred)       => data.filter(pred.asInstanceOf[Any => Boolean])
       case LocalCountDataset(_)           => List(data.length)
       case LocalReduceDataset(_, reducer) => List(data.reduce(reducer.asInstanceOf[(Any, Any) => Any]))
