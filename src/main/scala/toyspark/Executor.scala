@@ -21,12 +21,13 @@ final case class Executor(datasets: List[Dataset[_]],
   private def makeList[T](elems: Object, dtype: T) = elems.asInstanceOf[List[T]]
 
   override def run(): Unit = {
-    // todo lookup for `save` and start from there
-
-    val initialData    = getInitialData(datasets.head)
-    val finalData      = datasets.tail.foldLeft(initialData)((iter, trans) => performTransformation(trans, iter))
-    val finalDatasetID = Context.cread(datasets.last)
-    Context.setSendingBufferEntry(finalDatasetID, executorId, finalData)
+    val initialData = getInitialData(datasets.head)
+    val finalData   = datasets.tail.foldLeft(initialData)((iter, trans) => performTransformation(trans, iter))
+    val fetchedDatasetID = datasets.last match {
+      case MemCacheDataset(wrapping) => Context.cread(wrapping)
+      case _                         => Context.cread(datasets.last)
+    }
+    Context.setSendingBufferEntry(fetchedDatasetID, executorId, finalData)
     barrier.await()
   }
 
