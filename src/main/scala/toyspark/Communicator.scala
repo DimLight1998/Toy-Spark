@@ -17,10 +17,11 @@ final case class Communicator() extends Runnable {
         case DataRequest(targetDatasetID, samplingType) =>
           Logger.getGlobal.info(s"received data request for dataset $targetDatasetID")
           sendRequestedData(incomingSocket, targetDatasetID, samplingType)
-        case CommunicatorShutdown() => shouldShutdown = true
-        case _                      => throw new RuntimeException("unexpected message type")
+        case CommunicatorShutdown() =>
+          shouldShutdown = true
+          incomingSocket.close()
+        case _ => throw new RuntimeException("unexpected message type")
       }
-      incomingSocket.close()
     }
     Context.getDataServerSocket.close()
   }
@@ -32,14 +33,18 @@ final case class Communicator() extends Runnable {
       selectedIndices.map(idx => entry(idx))
     }
 
-    // todo new thread
-    val entries = Context.getSendingBufferDataByDatasetID(targetDatasetID)
-    val resp = samplingType match {
-      case FullSampling() =>
-        DataResponse(entries.flatten)
-      case PartialSampling(partitionIndex, numPartitions, seed) =>
-        DataResponse(entries.flatMap(entry => applySampling(entry, partitionIndex, numPartitions, seed)))
-    }
-    incomingSocket.sendToySparkMessage(resp)
+    new Thread {
+      override def run(): Unit = {
+        val entries = Context.getSendingBufferDataByDatasetID(targetDatasetID)
+        val resp = samplingType match {
+          case FullSampling() =>
+            DataResponse(entries.flatten)
+          case PartialSampling(partitionIndex, numPartitions, seed) =>
+            DataResponse(entries.flatMap(entry => applySampling(entry, partitionIndex, numPartitions, seed)))
+        }
+        incomingSocket.sendToySparkMessage(resp)
+        incomingSocket.close()
+      }
+    }.start()
   }
 }
