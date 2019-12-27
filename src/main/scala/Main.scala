@@ -6,10 +6,10 @@ object Main {
     // generate x
     val xs1 = Dataset.generate(List(4, 4, 4), (_, fragID) => {
       println(s"fragment $fragID is generating data for x!")
-      List.fill(3)(Random.nextDouble())
-    }) // 36
-    val xs2 = Dataset.generate(List(2, 2, 2), (_, _) => List.fill(3)(Random.nextDouble())) // 18
-    val xs  = xs1.cartesianWith(xs2).map({ case (x1, x2) => x1 + x2 }) // 648
+      List.fill(6)(Random.nextDouble())
+    }) // 72
+    val xs2 = Dataset.generate(List(2, 2, 2), (_, _) => List.fill(6)(Random.nextDouble())) // 36
+    val xs  = xs1.cartesianWith(xs2).map({ case (x1, x2) => x1 + x2 }).distinct() // 72 * 36
     xs.save()
     println(s"we have ${xs.count()} xs now")
 
@@ -18,12 +18,12 @@ object Main {
       println(s"fragment $fragID is generating data for y!")
       List.fill(10)(Random.nextDouble())
     }) // 160
-    val ys2 = Dataset.generate(List(3, 4, 3), (_, _) => List.fill(50)(Random.nextDouble())) // 500
-    val ys  = ys1.unionWith(ys2).map(y => y * 2)                                            // 660
+    val ys2 = Dataset.generate(List(3, 4, 3), (_, _) => List.fill(60)(Random.nextDouble())) // 600
+    val ys  = ys1.unionWith(ys2).map(y => y * 2).distinct()                                 // 760
     println(s"there is ${ys.count()} ys now")
 
     // generate points
-    val points = xs.cartesianWith(ys) // 648 * 660
+    val points = xs.cartesianWith(ys) // 72 * 36 * 760
     points.save()
     println(s"total number of points: ${points.count()}")
 
@@ -93,6 +93,20 @@ object Main {
     println(a.joinWith(b).count())
   }
 
+  def intersectionTest(): Unit = {
+    def gen1(): List[Int] = {
+      (for (_ <- 1 to 100) yield Random.nextInt(100)).toList
+    }
+
+    def gen2(): List[Int] = {
+      (for (_ <- 1 to 100) yield Random.nextInt(50) * 2).toList
+    }
+
+    val a = Dataset.generate(List(4, 4, 4), (_, _) => gen1())
+    val b = Dataset.generate(List(4, 4, 4), (_, _) => gen2())
+    println(a.intersectionWith(b).distinct().collect(Nil))
+  }
+
   def pageRank(): Unit = {
     def randomSourceURL()      = Random.nextPrintableChar() + Random.nextInt(10)
     def randomDestinationURL() = Random.nextPrintableChar() + Random.nextInt(10)
@@ -127,6 +141,7 @@ object Main {
 
 //    pageRank()
     xxast()
+//    intersectionTest()
 
     Communication.close()
   }
