@@ -85,9 +85,12 @@ final case class Executor(datasets: List[Dataset[_]],
       case UnionDataset(lhs, rhs) =>
         val seed = getSeed(lhs, rhs, transformationToPerform)
         data ++ requestDataOverNetwork(rhs, RandomSampling(getExecutorIndex, thisStagePartitions.sum, seed))
-      case IntersectionDataset(_, rhs) =>
-        val rhsData = requestDataOverNetwork(rhs, FullSampling())
+      case LocalIntersectionDataset(_, rhs) =>
+        val hashes = data.map(k => k.hashCode).distinct
+        val rhsData = requestDataOverNetwork(rhs, HashSelecting(hashes))
         data.filter(x => rhsData.contains(x))
+//        val rhsData = requestDataOverNetwork(rhs, FullSampling())
+//        data.filter(x => rhsData.contains(x))
       case CartesianDataset(_, rhs) =>
         val rhsData = requestDataOverNetwork(rhs, FullSampling())
         data.flatMap(x => rhsData.map(y => (x, y)))

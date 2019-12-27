@@ -8,8 +8,9 @@ abstract class Dataset[T] {
   def repartition(partitions: List[Int]): RepartitionDataset[T]     = RepartitionDataset(this, partitions)
   def distinct(): LocalDistinctDataset[T]                           = LocalDistinctDataset(HashShuffleDataset(this))
   def unionWith(other: Dataset[T]): UnionDataset[T]                 = UnionDataset(this, other)
-  def intersectionWith(other: Dataset[T]): IntersectionDataset[T]   = IntersectionDataset(this, other)
-  def cartesianWith[U](other: Dataset[U]): CartesianDataset[T, U]   = CartesianDataset(this, other)
+  def intersectionWith(other: Dataset[T]): LocalIntersectionDataset[T] =
+    LocalIntersectionDataset(HashShuffleDataset(this), other)
+  def cartesianWith[U](other: Dataset[U]): CartesianDataset[T, U] = CartesianDataset(this, other)
   def joinWith(other: Dataset[_]): LocalJointDataset[_] =
     LocalJointDataset(PairHashShuffleDataset(this), other)
   def groupByKey(): LocalGroupedByKeyDataset[Any] =
@@ -44,7 +45,7 @@ case class RepartitionDataset[T](upstream: Dataset[T], partitions: List[Int])   
 case class HashShuffleDataset[T](upstream: Dataset[T])                                   extends Dataset[T]
 case class LocalDistinctDataset[T](upstream: Dataset[T])                                 extends Dataset[T]
 case class UnionDataset[T](lhs: Dataset[T], rhs: Dataset[T])                             extends Dataset[T]
-case class IntersectionDataset[T](lhs: Dataset[T], rhs: Dataset[T])                      extends Dataset[T]
+case class LocalIntersectionDataset[T](lhs: Dataset[T], rhs: Dataset[T])                 extends Dataset[T]
 case class CartesianDataset[T, U](lhs: Dataset[T], rhs: Dataset[U])                      extends Dataset[(T, U)]
 case class LocalCountDataset[T](upstream: Dataset[T])                                    extends Dataset[T]
 case class IsSavingSeqFileOkDataset[T](upstream: Dataset[T], dir: String, name: String)  extends Dataset[T]

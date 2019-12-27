@@ -16,14 +16,14 @@ object Main {
     // generate y
     val ys1 = Dataset.generate(List(4, 6, 6), (_, fragID) => {
       println(s"fragment $fragID is generating data for y!")
-      List.fill(5)(Random.nextDouble())
-    }) // 80
-    val ys2 = Dataset.generate(List(3, 4, 3), (_, _) => List.fill(12)(Random.nextDouble())) // 120
-    val ys  = ys1.unionWith(ys2).map(y => y * 2)                                            // 200
+      List.fill(10)(Random.nextDouble())
+    }) // 160
+    val ys2 = Dataset.generate(List(3, 4, 3), (_, _) => List.fill(50)(Random.nextDouble())) // 500
+    val ys  = ys1.unionWith(ys2).map(y => y * 2)                                            // 660
     println(s"there is ${ys.count()} ys now")
 
     // generate points
-    val points = xs.cartesianWith(ys) // 648 * 200
+    val points = xs.cartesianWith(ys) // 648 * 660
     points.save()
     println(s"total number of points: ${points.count()}")
 
@@ -125,7 +125,8 @@ object Main {
   def main(args: Array[String]): Unit = {
     Communication.initialize(args)
 
-    pageRank()
+//    pageRank()
+    xxast()
 
     Communication.close()
   }

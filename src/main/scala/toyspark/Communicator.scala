@@ -39,6 +39,11 @@ final case class Communicator() extends Runnable {
     def applyPairHashSampling(entry: List[_], partitionIndex: Int, numPartitions: Int): List[_] =
       entry.asInstanceOf[List[(Any, Any)]].filter({ case (k, v) => k.hashCode() % numPartitions == partitionIndex })
 
+    def applyHashSelecting(entry: List[_], hashes: List[Int]): List[_] = {
+      val hashesSet = hashes.toSet
+      entry.filter(k => hashesSet.contains(k.hashCode()))
+    }
+
     def applyPairHashSelecting(entry: List[_], hashes: List[Int]): List[_] = {
       val hashesSet = hashes.toSet
       entry.asInstanceOf[List[(Any, Any)]].filter({ case (k, v) => hashesSet.contains(k.hashCode()) })
@@ -56,6 +61,8 @@ final case class Communicator() extends Runnable {
             DataResponse(entries.flatMap(entry => applyHashSampling(entry, partitionIndex, numPartitions)))
           case PairHashSampling(partitionIndex, numPartitions) =>
             DataResponse(entries.flatMap(entry => applyPairHashSampling(entry, partitionIndex, numPartitions)))
+          case HashSelecting(hashes) =>
+            DataResponse(entries.flatMap(entry => applyHashSelecting(entry, hashes)))
           case PairHashSelecting(hashes) =>
             DataResponse(entries.flatMap(entry => applyPairHashSelecting(entry, hashes)))
         }
