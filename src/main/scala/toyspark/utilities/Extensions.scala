@@ -28,5 +28,24 @@ object Extensions {
       list.groupBy({ case (k, v) => k }).map({ case (k, v) => (k, v.map({ case (kk, vv) => vv })) }).toList
     def reduceByKey(reducer: (U, U) => U): List[(T, U)] =
       list.groupByKey().map({ case (k, v) => (k, v.reduce(reducer)) })
+    def getKeyHashes: List[Int] = {
+      list.map({ case (k, v) => k.hashCode() })
+    }
+  }
+
+  implicit class ListTupleListWrapper[T, U](val list: List[(T, U)]) {
+    def joinWith[K](other: List[(T, K)]): List[(T, (U, K))] = {
+      def filterAux[M](list: List[(T, M)], key: T): List[M] = {
+        list.filter({case (k, _) => k == key}).map({case (_, v) => v})
+      }
+      val ks1 = list.map({ case (k, _)  => k })
+      val ks2 = other.map({ case (k, _) => k })
+      val commonKeys = ks1.intersect(ks2).distinct
+      commonKeys.flatMap(k => {
+        val elems1 = filterAux(list, k)
+        val elems2 = filterAux(other, k)
+        for(e1 <- elems1; e2 <- elems2) yield (k, (e1, e2))
+      })
+    }
   }
 }

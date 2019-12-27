@@ -67,9 +67,7 @@ object Main {
     println(a.collect(Nil))
   }
 
-  def main(args: Array[String]): Unit = {
-    Communication.initialize(args)
-
+  def reduceByKeyTest(): Unit = {
     def gen(): (Int, String) = {
       val a = Random.nextInt(10)
       val b = a.toString + "<" + Random.nextInt(100) + ">"
@@ -79,6 +77,55 @@ object Main {
       .generate(List(4, 4, 4), (_, _) => List.fill(20)(gen()))
       .reduceByKey((a: Any, b: Any) => a.asInstanceOf[String] + b.asInstanceOf[String])
     println(a.collect(Nil))
+  }
+
+  def joinTest(): Unit = {
+    def gen(): (Int, List[String]) = {
+      val a = Random.nextInt(20)
+      val b = a.toString + "<" + Random.nextInt(100) + ">"
+      val c = a.toString + "<" + Random.nextInt(100) + ">"
+      val d = a.toString + "<" + Random.nextInt(100) + ">"
+      (a, List(b, c, d))
+    }
+
+    val a = Dataset.generate(List(4, 4, 4), (_, _) => List.fill(20)(gen()))
+    val b = Dataset.generate(List(4, 4, 4), (_, _) => List.fill(20)(gen()))
+    println(a.joinWith(b).count())
+  }
+
+  def pageRank(): Unit = {
+    def randomSourceURL()      = Random.nextPrintableChar() + Random.nextInt(10)
+    def randomDestinationURL() = Random.nextPrintableChar() + Random.nextInt(10)
+
+    val iters = 10
+    val links = Dataset
+      .generate(List(4, 4, 4), (_, _) => List.fill(1000)(randomSourceURL(), randomDestinationURL()))
+      .distinct()
+      .groupByKey()
+    links.save()
+    var ranks = links.map({ case (k, _) => (k, 1.0) })
+
+    for (_ <- 1 to iters) {
+      val contribs = links
+        .joinWith(ranks)
+        .flatMap({
+          case (_, (urls: List[Any], rank: Double)) =>
+            val size = urls.size
+            urls.map(url => (url, rank / size))
+        })
+      ranks = contribs
+        .reduceByKey((x, y) => x.asInstanceOf[Double] + y.asInstanceOf[Double])
+        .map({ case (k, v: Double) => (k, 0.15 + 0.85 * v) })
+    }
+
+    val output = ranks.collect(Nil)
+    output.foreach(tup => println(s"${tup._1} has rank: ${tup._2}"))
+  }
+
+  def main(args: Array[String]): Unit = {
+    Communication.initialize(args)
+
+    pageRank()
 
     Communication.close()
   }

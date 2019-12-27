@@ -39,6 +39,11 @@ final case class Communicator() extends Runnable {
     def applyPairHashSampling(entry: List[_], partitionIndex: Int, numPartitions: Int): List[_] =
       entry.asInstanceOf[List[(Any, Any)]].filter({ case (k, v) => k.hashCode() % numPartitions == partitionIndex })
 
+    def applyPairHashSelecting(entry: List[_], hashes: List[Int]): List[_] = {
+      val hashesSet = hashes.toSet
+      entry.asInstanceOf[List[(Any, Any)]].filter({ case (k, v) => hashesSet.contains(k.hashCode()) })
+    }
+
     new Thread {
       override def run(): Unit = {
         val entries = Context.getSendingBufferDataByDatasetID(targetDatasetID)
@@ -51,6 +56,8 @@ final case class Communicator() extends Runnable {
             DataResponse(entries.flatMap(entry => applyHashSampling(entry, partitionIndex, numPartitions)))
           case PairHashSampling(partitionIndex, numPartitions) =>
             DataResponse(entries.flatMap(entry => applyPairHashSampling(entry, partitionIndex, numPartitions)))
+          case PairHashSelecting(hashes) =>
+            DataResponse(entries.flatMap(entry => applyPairHashSelecting(entry, hashes)))
         }
         incomingSocket.sendToySparkMessage(resp)
         incomingSocket.close()

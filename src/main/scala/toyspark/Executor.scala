@@ -91,6 +91,11 @@ final case class Executor(datasets: List[Dataset[_]],
       case CartesianDataset(_, rhs) =>
         val rhsData = requestDataOverNetwork(rhs, FullSampling())
         data.flatMap(x => rhsData.map(y => (x, y)))
+      case LocalJointDataset(_, rhs) =>
+        val pairData = data.asInstanceOf[List[(Any, List[Any])]]
+        val hashes = pairData.getKeyHashes.distinct
+        val rhsData = requestDataOverNetwork(rhs, PairHashSelecting(hashes)).asInstanceOf[List[(Any, List[Any])]]
+        pairData.joinWith(rhsData)
       case IsSavingSeqFileOkDataset(_, dir, name) =>
         val serial = SerializationUtils.serialize(data)
         List(

@@ -10,7 +10,8 @@ abstract class Dataset[T] {
   def unionWith(other: Dataset[T]): UnionDataset[T]                 = UnionDataset(this, other)
   def intersectionWith(other: Dataset[T]): IntersectionDataset[T]   = IntersectionDataset(this, other)
   def cartesianWith[U](other: Dataset[U]): CartesianDataset[T, U]   = CartesianDataset(this, other)
-  def join(other: Dataset[_]): JointDataset[_]                      = JointDataset(this, other)
+  def joinWith(other: Dataset[_]): LocalJointDataset[_] =
+    LocalJointDataset(PairHashShuffleDataset(this), other)
   def groupByKey(): LocalGroupedByKeyDataset[Any] =
     LocalGroupedByKeyDataset(PairHashShuffleDataset(this))
   def reduceByKey(reducer: (Any, Any) => Any): LocalReducedByKeyDataset[Any] =
@@ -52,4 +53,4 @@ case class MemCacheDataset[T](wrapping: Dataset[T])                             
 case class PairHashShuffleDataset[T](upstream: Dataset[_])                               extends Dataset[T]
 case class LocalGroupedByKeyDataset[T](upstream: Dataset[_])                             extends Dataset[T]
 case class LocalReducedByKeyDataset[T](upstream: Dataset[_], reducer: (Any, Any) => Any) extends Dataset[T]
-case class JointDataset[T](lhs: Dataset[T], rhs: Dataset[_])                             extends Dataset[T]
+case class LocalJointDataset[T](lhs: Dataset[_], rhs: Dataset[_])                        extends Dataset[T]
