@@ -108,32 +108,32 @@ object Main {
   }
 
   def pageRank(): Unit = {
-    def randomSourceURL()      = Random.nextPrintableChar() + Random.nextInt(10)
-    def randomDestinationURL() = Random.nextPrintableChar() + Random.nextInt(10)
+def randomSourceURL()      = Random.nextPrintableChar() + Random.nextInt(10)
+def randomDestinationURL() = Random.nextPrintableChar() + Random.nextInt(10)
 
-    val iters = 10
-    val links = Dataset
-      .generate(List(4, 4, 4), (_, _) => List.fill(1000)(randomSourceURL(), randomDestinationURL()))
-      .distinct()
-      .groupByKey()
-    links.save()
-    var ranks = links.map({ case (k, _) => (k, 1.0) })
+val iters = 10
+val links = Dataset
+  .generate(List(4, 4, 4), (_, _) => List.fill(1000)(randomSourceURL(), randomDestinationURL()))
+  .distinct()
+  .groupByKey()
+links.save()
+var ranks = links.map({ case (k, _) => (k, 1.0) })
 
-    for (_ <- 1 to iters) {
-      val contribs = links
-        .joinWith(ranks)
-        .flatMap({
-          case (_, (urls: List[Any], rank: Double)) =>
-            val size = urls.size
-            urls.map(url => (url, rank / size))
-        })
-      ranks = contribs
-        .reduceByKey((x, y) => x.asInstanceOf[Double] + y.asInstanceOf[Double])
-        .map({ case (k, v: Double) => (k, 0.15 + 0.85 * v) })
-    }
+for (_ <- 1 to iters) {
+  val contribs = links
+    .joinWith(ranks)
+    .flatMap({
+      case (_, (urls: List[Any], rank: Double)) =>
+        val size = urls.size
+        urls.map(url => (url, rank / size))
+    })
+  ranks = contribs
+    .reduceByKey((x, y) => x.asInstanceOf[Double] + y.asInstanceOf[Double])
+    .map({ case (k, v: Double) => (k, 0.15 + 0.85 * v) })
+}
 
-    val output = ranks.collect(Nil)
-    output.foreach(tup => println(s"${tup._1} has rank: ${tup._2}"))
+val output = ranks.collect(Nil)
+output.foreach(tup => println(s"${tup._1} has rank: ${tup._2}"))
   }
 
   def main(args: Array[String]): Unit = {

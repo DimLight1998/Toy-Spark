@@ -2,9 +2,112 @@
 
 ## 选题
 
+我们组的选题是实现一个 mini 版本的 Spark。
+
+我们希望尽可能多的实现原始 Spark 的功能，不在性能上面下过多的功夫。目前实现的功能已经超过了作业要求中要求实现的部分许多，而性能上和 Spark 尚有一定差距（大约 10 倍）。
+
+我们希望保留 Spark 的如下特点：
+
+- 用户只需编写串行程序
+- 自动并行化和分布式执行
+- 计算过程在内存中完成
+
 ## 实现功能
 
+### 系统完成情况
+
+详细的实现情况可以参阅最后一次展示的 PPT。这里列出比较重要的：
+
+- Dataset 之间的依赖关系可以是一个有向无环图
+- 支持在内存中缓存一个 dataset 的计算结果
+
+### 实现的 API
+
+- `generate`：产生数据，它的参数有两个，第一个参数是一个列表，例如 `List(4, 5, 5)` 表示你希望有三个节点，每个节点上分别有 4、5、5 个分片；第二个参数是一个 lambda 表达式，指定了生成数据的逻辑，这个 lambda 有两个参数，第一个参数是节点的编号，从 0 开始，第二个参数是这个节点上分片的编号，每个节点都是从 0 开始的。
+- `read`：从 HDFS 读入数据。（==TODO HTX==）
+- `map`、`filter`、`flatMap`、`distinct`：这几个的含义和使用比较显然。
+- `repartition` 提供一个参数，是一个表示如何重新分片的列表，意义同 `generate` 中的那个参数。
+- `groupByKey`：如果一个 dataset 的内容是键值对形式（`Dataset[(K, V)]`），会把它按照相同的 key 进行合并，得到 `Dataset[(K, List[V])]`。
+- `reduceByKey`：如果一个 dataset 的内容是键值对形式，会进行 group 之后在内部进行 reduce。
+- `unionWith`、`intersectionWith`：对两个 dataset 求并或交。
+- `cartestianWith`：求两个 dataset 的笛卡尔积。
+- `joinWith`：如果一个 dataset 的内容是键值对形式（`Dataset[(K, V)]`），另一个也是，并且键的类型相同（`Dataset[(K, R)]`），则按照 key 在组里进行笛卡尔积，得到 `Dataset[(K, (V, R))]`。
+- `reduce`、`collect`、`count`、`take`：这些是一些 actions，含义和 Spark 类似。
+- `saveAsSequenceFile`：==TODO HTX==
+- `saveAsSingleFile`：==TODO HTX==
+- `save`：对一个 Dataset 进行缓存。
+
+### 实现的 API 可以用来做什么
+
+Spark 能做的许多简单的工作都可以用 Toy-Spark 完成，例如迭代地计算 PageRank：
+
+```scala
+def randomSourceURL()      = Random.nextPrintableChar() + Random.nextInt(10)
+def randomDestinationURL() = Random.nextPrintableChar() + Random.nextInt(10)
+
+val iters = 10
+val links = Dataset
+  .generate(List(4, 4, 4), (_, _) => List.fill(1000)(randomSourceURL(), randomDestinationURL()))
+  .distinct()
+  .groupByKey()
+links.save()
+var ranks = links.map({ case (k, _) => (k, 1.0) })
+
+for (_ <- 1 to iters) {
+  val contribs = links
+    .joinWith(ranks)
+    .flatMap({
+      case (_, (urls: List[Any], rank: Double)) =>
+        val size = urls.size
+        urls.map(url => (url, rank / size))
+    })
+  ranks = contribs
+    .reduceByKey((x, y) => x.asInstanceOf[Double] + y.asInstanceOf[Double])
+    .map({ case (k, v: Double) => (k, 0.15 + 0.85 * v) })
+}
+
+val output = ranks.collect(Nil)
+output.foreach(tup => println(s"${tup._1} has rank: ${tup._2}"))
+```
+
+为了简单起见，URL 都是随机生成的。在实际的使用中你可以从 HDFS 读入，或者在 lambda 中读入相关的文件。可以看到我们的 Toy-Spark 支持：
+
+- Dataset 的缓存和复用
+- Dataset 依赖关系是一个有向无换图
+- Scala 的控制结构和 Toy-Spark 可以一起使用，例如上面的 `for`
+
+而且使用体验和 Spark 基本一致。
+
 ## 使用说明
+
+如果需要使用，在 `main` 函数中先使用 `Communication.initialize(args)`，然后写自己要执行的逻辑，然后使用 `Communication.close()` 回收资源。这一步可以仿照已有的 Main.scala 文件。
+
+然后提供一个 config.json 文件。该文件的格式如下：
+
+```json
+{
+    "master": {
+        "ip": "172.21.0.20",
+        "port": "23333"
+    },
+    "workers": [
+        {
+            "ip": "172.21.0.4"
+        },
+        {
+            "ip": "172.21.0.33"
+        }
+    ],
+	"hdfs": {
+		"coreSitePath": "/home/ubuntu/hadoop-2.7.7/etc/hadoop/core-site.xml",
+		"url": "hdfs://master:9000"
+	}
+}
+```
+
+其中 `master` 填 master 的 IP 地址和监听端口；`workers` 填各个 worker 的 IP 地址；`hdfs` ==TODO HTX==。
+
+最后，部署时使用 `sbt assembly` 命令得到 fat jar。在各个节点上使用 `java -jar foo.jar <n>` 运行。其中把 `<n>` 换成一个数字，对于 master 来说，这个数字是 0；对于各个 worker 来说，这个数字是它在 config.json 的 `workers` 数组中的下标（从 1 开始）。可以参考 scripts 目录下的部署和运行脚本。
 
 ## 实现细节
 
@@ -30,11 +133,13 @@ Transformation 和 action 的定义和 Spark 一致。
 
 #### Dataset、Partition 与 Record
 
-<!-- TODO -->
+- **Dataset** 的概念和 Spark 中的 RDD 是一致的。
+- 一个 dataset 会被实现为多个 **partitions**，每个 partition 是由一个线程来负责的。一个节点上可能有多个 partition。
+- 每个 partition 中有多个 record。
 
 #### Direct Dependency 与 Shuffle Dependency
 
-<!-- TODO -->
+如果一个 dataset 依赖上游（即之前的）dataset 是像 `map` 这样的，考虑一个 partition 的依赖时不需要考虑其它的 partition 的话，那么这种 dependency 就被称作是 direct dependency。反之，称为 shuffle dependency。实质上的区别就在于下游的 partition 中的数据是否只需要上游的一个 parititon 就可以确定，如果是就是 direct 的，否则是 shuffle 的。
 
 #### Job、Stage 与 Task
 
@@ -144,6 +249,8 @@ Stage 划分完成后，对于每个 job 需要确定这个 job 对应 stage 的
 
 值得注意的是，每个 partition 应该只被发送一次就可以从“发送缓冲区”中删除了，因为逻辑上讲在消除了分叉后每个 partition 只会被使用一次。不过也可以通过调用 `save` 方法来实现一次计算多次使用，但在这里而言，我们设计成把通信和缓存分离开来，即使通信机制不需要知道缓存机制的存在，也可以达到一次计算多次使用的目的。
 
+通行时不是所有的数据都需要传输。为了表示这种传输时数据的选择策略，我们引入了一个叫做 `SamplingType` 的东西。它指明了如何挑选要传输的数据，例如 `FullSampling` 表示的是传输所有数据（在 `collect` 时使用）；`HashSampling` 表示根据元素的 hash 值决定它是否应该被发送往某个下游 dataset（在 `intersectionWith` 的时候被用到）。我们一共实现了六种选择策略。
+
 #### 缓存机制的实现
 
 所谓的缓存机制指的就是调用 `save` 方法后发生的事情。在代码中调用 `save` 方法会给 dateset 打上相应的标记。计算时：
@@ -153,9 +260,23 @@ Stage 划分完成后，对于每个 job 需要确定这个 job 对应 stage 的
 
 显然，由于被 `save` 的 dataset 极有可能被多次调用，即使它被使用了也不应该移出缓存。
 
-## 正确性测试
+目前的缓存机制是使用内存实现的，但是它也可以很容易地使用文件的方式来实现。
 
+## 测试结果与分析
 
+==TODO HTX，注意要分析==
 
-## 收获与感悟
+### 分工情况
+
+张洋：
+
+- 设计和实现 Toy-Spark 的大体框架
+- 四次 PPT 制作和展示
+- 撰写文档
+
+郝天翔：
+
+- HDFS 的读写支持
+- 一些 transformation 和 action 的实现
+- 正确性测试与性能测试
 
