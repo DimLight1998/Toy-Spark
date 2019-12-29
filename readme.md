@@ -24,7 +24,7 @@
 ### 实现的 API
 
 - `generate`：产生数据，它的参数有两个，第一个参数是一个列表，例如 `List(4, 5, 5)` 表示你希望有三个节点，每个节点上分别有 4、5、5 个分片；第二个参数是一个 lambda 表达式，指定了生成数据的逻辑，这个 lambda 有两个参数，第一个参数是节点的编号，从 0 开始，第二个参数是这个节点上分片的编号，每个节点都是从 0 开始的。
-- `read`：从 HDFS 读入数据。它接收三个参数：第一个参数与generate的第一个参数意义相同；第二参数为存放文件的绝对路径；第三个参数为一个某类型的数据。这里我们约定文件里数据均是由org.apache.commons.lang3.SerializationUtils来进行序列化后存储的byte流，序列化之前的数据类型为scala中的List[T]。而在使用`read`读取数据时，第三个参数的数据类型即是需要传入一个与存储时的T相同类型的数据(取值随意)以便在反序列化时做类型推断。
+- `read`：从 HDFS 读入数据。它接收三个参数：第一个参数与generate的第一个参数意义相同；第二个参数为存放文件的绝对路径；第三个参数为一个某类型的数据。这里我们约定文件里数据均是由org.apache.commons.lang3.SerializationUtils来进行序列化后存储的byte流，序列化之前的数据类型为scala中的List[T]。而在使用`read`读取数据时，第三个参数的数据类型即是需要传入一个与存储时的T相同类型的数据(取值随意)以便在反序列化时做类型推断。
 - `map`、`filter`、`flatMap`、`distinct`：这几个的含义和使用比较显然。
 - `repartition` 提供一个参数，是一个表示如何重新分片的列表，意义同 `generate` 中的那个参数。
 - `groupByKey`：如果一个 dataset 的内容是键值对形式（`Dataset[(K, V)]`），会把它按照相同的 key 进行合并，得到 `Dataset[(K, List[V])]`。
@@ -73,7 +73,7 @@ output.foreach(tup => println(s"${tup._1} has rank: ${tup._2}"))
 为了简单起见，URL 都是随机生成的。在实际的使用中你可以从 HDFS 读入，或者在 lambda 中读入相关的文件。可以看到我们的 Toy-Spark 支持：
 
 - Dataset 的缓存和复用
-- Dataset 依赖关系是一个有向无换图
+- Dataset 依赖关系是一个有向无环图
 - Scala 的控制结构和 Toy-Spark 可以一起使用，例如上面的 `for`
 
 而且使用体验和 Spark 基本一致。
@@ -272,7 +272,7 @@ Stage 划分完成后，对于每个 job 需要确定这个 job 对应 stage 的
 
 将Spark-examples中的SparkPi例程在我们的框架下重新实现，分别重复记录10次在Toy-Spark和Spark下该程序的运行时间，取平均来进行性能对比。
 
-实验结果：部署在同样的三台机器上，Spark运行一次该例程需大约0.7s，Toy-Spark运行一次该例程需大约2.8s。
+实验结果：部署在同样的三台机器上，Spark运行一次该例程需大约0.4s，Toy-Spark运行一次该例程需大约2.8s。
 
 结论：Toy-Spark的性能大约比原生Spark慢了7倍左右。
 
