@@ -24,7 +24,7 @@
 ### 实现的 API
 
 - `generate`：产生数据，它的参数有两个，第一个参数是一个列表，例如 `List(4, 5, 5)` 表示你希望有三个节点，每个节点上分别有 4、5、5 个分片；第二个参数是一个 lambda 表达式，指定了生成数据的逻辑，这个 lambda 有两个参数，第一个参数是节点的编号，从 0 开始，第二个参数是这个节点上分片的编号，每个节点都是从 0 开始的。
-- `read`：从 HDFS 读入数据。（==TODO HTX==）
+- `read`：从 HDFS 读入数据。它接收三个参数：第一个参数与generate的第一个参数意义相同；第二参数为存放文件的绝对路径；第三个参数为一个某类型的数据。这里我们约定文件里数据均是由org.apache.commons.lang3.SerializationUtils来进行序列化后存储的byte流，序列化之前的数据类型为scala中的List[T]。而在使用`read`读取数据时，第三个参数的数据类型即是需要传入一个与存储时的T相同类型的数据(取值随意)以便在反序列化时做类型推断。
 - `map`、`filter`、`flatMap`、`distinct`：这几个的含义和使用比较显然。
 - `repartition` 提供一个参数，是一个表示如何重新分片的列表，意义同 `generate` 中的那个参数。
 - `groupByKey`：如果一个 dataset 的内容是键值对形式（`Dataset[(K, V)]`），会把它按照相同的 key 进行合并，得到 `Dataset[(K, List[V])]`。
@@ -33,8 +33,8 @@
 - `cartestianWith`：求两个 dataset 的笛卡尔积。
 - `joinWith`：如果一个 dataset 的内容是键值对形式（`Dataset[(K, V)]`），另一个也是，并且键的类型相同（`Dataset[(K, R)]`），则按照 key 在组里进行笛卡尔积，得到 `Dataset[(K, (V, R))]`。
 - `reduce`、`collect`、`count`、`take`：这些是一些 actions，含义和 Spark 类似。
-- `saveAsSequenceFile`：==TODO HTX==
-- `saveAsSingleFile`：==TODO HTX==
+- `saveAsSequenceFile`：将计算结果保存到HDFS文件系统中。这里与Spark的处理方式类似，为了性能考虑，当有N个节点、第i个节点上有M[i]个partition的时候，该api会在每个partition的线程中存储该线程持有的数据，因此会产生复数个小文件，而非将全部数据汇总到master后再存成一整个文件。
+- `saveAsSingleFile`：`savaAsSequenceFile`的数据汇总版本。它会将所有节点的数据汇总到主节点上，再由主节点存储到单个HDFS文件中。数据较大时可能引起内存溢出的问题，且效率相对较低。
 - `save`：对一个 Dataset 进行缓存。
 
 ### 实现的 API 可以用来做什么
@@ -105,7 +105,7 @@ output.foreach(tup => println(s"${tup._1} has rank: ${tup._2}"))
 }
 ```
 
-其中 `master` 填 master 的 IP 地址和监听端口；`workers` 填各个 worker 的 IP 地址；`hdfs` ==TODO HTX==。
+其中 `master` 填 master 的 IP 地址和监听端口；`workers` 填各个 worker 的 IP 地址；`hdfs` 填与HDFS部署服务器上内容相同的core-site.xml配置文件在本地的路径，以及相应HDFS部署服务器的9000端口地址。
 
 最后，部署时使用 `sbt assembly` 命令得到 fat jar。在各个节点上使用 `java -jar foo.jar <n>` 运行。其中把 `<n>` 换成一个数字，对于 master 来说，这个数字是 0；对于各个 worker 来说，这个数字是它在 config.json 的 `workers` 数组中的下标（从 1 开始）。可以参考 scripts 目录下的部署和运行脚本。
 
@@ -262,11 +262,21 @@ Stage 划分完成后，对于每个 job 需要确定这个 job 对应 stage 的
 
 目前的缓存机制是使用内存实现的，但是它也可以很容易地使用文件的方式来实现。
 
-## 测试结果与分析
+## 测试情况
 
-==TODO HTX，注意要分析==
+### 正确性测试
 
-### 分工情况
+先假定generate这一数据生成方法是正确的，然后以此为基准对各个Transformation和Action的api以及read方法进行了单元测试。
+
+### 性能测试
+
+将Spark-examples中的SparkPi例程在我们的框架下重新实现，分别重复记录10次在Toy-Spark和Spark下该程序的运行时间，取平均来进行性能对比。
+
+实验结果：部署在同样的三台机器上，Spark运行一次该例程需大约0.7s，Toy-Spark运行一次该例程需大约2.8s。
+
+结论：Toy-Spark的性能大约比原生Spark慢了7倍左右。
+
+## 分工情况
 
 张洋：
 

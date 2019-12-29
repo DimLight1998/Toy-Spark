@@ -9,7 +9,7 @@ object Main {
       List.fill(6)(Random.nextDouble())
     }) // 72
     val xs2 = Dataset.generate(List(2, 2, 2), (_, _) => List.fill(6)(Random.nextDouble())) // 36
-    val xs  = xs1.cartesianWith(xs2).map({ case (x1, x2) => x1 + x2 }).distinct() // 72 * 36
+    val xs = xs1.cartesianWith(xs2).map({ case (x1, x2) => x1 + x2 }).distinct() // 72 * 36
     xs.save()
     println(s"we have ${xs.count()} xs now")
 
@@ -19,7 +19,7 @@ object Main {
       List.fill(10)(Random.nextDouble())
     }) // 160
     val ys2 = Dataset.generate(List(3, 4, 3), (_, _) => List.fill(60)(Random.nextDouble())) // 600
-    val ys  = ys1.unionWith(ys2).map(y => y * 2).distinct()                                 // 760
+    val ys = ys1.unionWith(ys2).map(y => y * 2).distinct() // 760
     println(s"there is ${ys.count()} ys now")
 
     // generate points
@@ -29,15 +29,15 @@ object Main {
 
     // filter points
     val pointsInQuarterCircle = points.filter({ case (x, y) => x * x + (y - 2) * (y - 2) < 4 })
-    val pointsInSemicircle    = points.filter({ case (x, y) => (x - 1) * (x - 1) + y * y < 1 })
-    val pointsInCommon        = pointsInQuarterCircle.intersectionWith(pointsInSemicircle)
+    val pointsInSemicircle = points.filter({ case (x, y) => (x - 1) * (x - 1) + y * y < 1 })
+    val pointsInCommon = pointsInQuarterCircle.intersectionWith(pointsInSemicircle)
     pointsInCommon.save()
     println(pointsInCommon.count())
 
     // count number and sample some points
     val numPointsInCommon = pointsInCommon.count()
-    val numPoints         = points.count()
-    val samplesInCommon   = pointsInCommon.collect(Nil).slice(0, 100)
+    val numPoints = points.count()
+    val samplesInCommon = pointsInCommon.collect(Nil).slice(0, 100)
 
     println(s"estimated area size: ${(numPointsInCommon * 4).toDouble / numPoints.toDouble}")
     println(s"actual area size: ${2 * Math.PI - 3 * Math.atan(2) - 2}")
@@ -61,6 +61,7 @@ object Main {
       val b = a.toString + Random.nextInt(100)
       (a, b)
     }
+
     val a = Dataset
       .generate(List(4, 4, 4), (_, _) => List.fill(20)(gen()))
       .groupByKey()
@@ -73,6 +74,7 @@ object Main {
       val b = a.toString + "<" + Random.nextInt(100) + ">"
       (a, b)
     }
+
     val a = Dataset
       .generate(List(4, 4, 4), (_, _) => List.fill(20)(gen()))
       .reduceByKey((a: Any, b: Any) => a.asInstanceOf[String] + b.asInstanceOf[String])
@@ -108,40 +110,43 @@ object Main {
   }
 
   def pageRank(): Unit = {
-def randomSourceURL()      = Random.nextPrintableChar() + Random.nextInt(10)
-def randomDestinationURL() = Random.nextPrintableChar() + Random.nextInt(10)
+    def randomSourceURL() = Random.nextPrintableChar() + Random.nextInt(10)
 
-val iters = 10
-val links = Dataset
-  .generate(List(4, 4, 4), (_, _) => List.fill(1000)(randomSourceURL(), randomDestinationURL()))
-  .distinct()
-  .groupByKey()
-links.save()
-var ranks = links.map({ case (k, _) => (k, 1.0) })
+    def randomDestinationURL() = Random.nextPrintableChar() + Random.nextInt(10)
 
-for (_ <- 1 to iters) {
-  val contribs = links
-    .joinWith(ranks)
-    .flatMap({
-      case (_, (urls: List[Any], rank: Double)) =>
-        val size = urls.size
-        urls.map(url => (url, rank / size))
-    })
-  ranks = contribs
-    .reduceByKey((x, y) => x.asInstanceOf[Double] + y.asInstanceOf[Double])
-    .map({ case (k, v: Double) => (k, 0.15 + 0.85 * v) })
-}
+    val iters = 10
+    val links = Dataset
+      .generate(List(4, 4, 4), (_, _) => List.fill(1000)(randomSourceURL(), randomDestinationURL()))
+      .distinct()
+      .groupByKey()
+    links.save()
+    var ranks = links.map({ case (k, _) => (k, 1.0) })
 
-val output = ranks.collect(Nil)
-output.foreach(tup => println(s"${tup._1} has rank: ${tup._2}"))
+    for (_ <- 1 to iters) {
+      val contribs = links
+        .joinWith(ranks)
+        .flatMap({
+          case (_, (urls: List[Any], rank: Double)) =>
+            val size = urls.size
+            urls.map(url => (url, rank / size))
+        })
+      ranks = contribs
+        .reduceByKey((x, y) => x.asInstanceOf[Double] + y.asInstanceOf[Double])
+        .map({ case (k, v: Double) => (k, 0.15 + 0.85 * v) })
+    }
+
+    val output = ranks.collect(Nil)
+    output.foreach(tup => println(s"${tup._1} has rank: ${tup._2}"))
   }
 
   def main(args: Array[String]): Unit = {
     Communication.initialize(args)
 
-//    pageRank()
+    //    pageRank()
     xxast()
-//    intersectionTest()
+    //    intersectionTest()
+    //    TestCase.calculatePi()
+    //    TestCase.test3()
 
     Communication.close()
   }

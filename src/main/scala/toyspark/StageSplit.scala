@@ -12,6 +12,7 @@ object StageSplit {
     case CountAction(upstream)                         => LocalCountDataset(upstream)
     case TakeAction(upstream, _, _)                    => upstream
     case SaveAsSequenceFileAction(upstream, dir, name) => IsSavingSeqFileOkDataset(upstream, dir, name)
+    case SaveAsSingleFileAction(upstream, _, _)        => upstream
     case ReduceAction(upstream, reducer, _)            => LocalReduceDataset(upstream, reducer)
   }
 
